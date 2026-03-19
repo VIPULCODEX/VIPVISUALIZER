@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIPvisualize</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- vis-network for Graph Visualization -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Dashboard -->
+        <aside class="dashboard">
+            <header>
+                <h1>VIP<span class="highlight">visualize</span></h1>
+                <p class="subtitle">Match donors and recipients efficiently using graph theory.</p>
+            </header>
+
+            <div class="actions">
+                <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                    <label for="nodeInput" style="font-size: 14px; color: var(--text-secondary);">Number of Nodes:</label>
+                    <input type="number" id="nodeInput" value="50" min="5" max="1000" style="background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); color: white; padding: 6px 10px; border-radius: 6px; width: 80px; font-family: 'Inter', sans-serif;">
+                </div>
+                <button id="loadGraphBtn" class="btn primary-btn">
+                    <span class="btn-text">Load Patient Graph</span>
+                    <span class="loader hidden"></span>
+                </button>
+            </div>
+
+            <div class="metrics-panel">
+                <h2>Graph Metrics</h2>
+                <div class="metric-card">
+                    <span class="metric-title">Nodes</span>
+                    <span class="metric-value" id="nodeCount">-</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-title">Edges</span>
+                    <span class="metric-value" id="edgeCount">-</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-title">Cycles found (≤3)</span>
+                    <span class="metric-value highlight" id="cycleCount">-</span>
+                </div>
+            </div>
+
+            <div class="benchmark-panel">
+                <h2>Matching Performance ⚡</h2>
+                <p class="info-text">Comparing time taken for cycles checking.</p>
+                <div class="benchmark-results">
+                    <div class="bm-card">
+                        <span>Induced Check</span>
+                        <strong id="timeInduced">- ms</strong>
+                    </div>
+                    <div class="bm-card">
+                        <span>Acyclic Check</span>
+                        <strong id="timeAcyclic">- ms</strong>
+                    </div>
+                </div>
+                <p id="benchmarkConclusion" class="conclusion" style="display: none;"></p>
+            </div>
+            
+            <div class="cycle-list-panel">
+                <h2>Found Cycles</h2>
+                <ul id="cycleList" class="cycle-list">
+                    <li class="empty-state">Load graph to find cycles</li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Graph View -->
+        <main class="graph-view">
+            <div id="networkMap" class="network-container">
+                <div class="placeholder-text">Click "Load Patient Graph" to reveal connections</div>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><span class="dot match-o"></span> Type O Donor</div>
+                <div class="legend-item"><span class="dot match-a"></span> Type A Donor</div>
+                <div class="legend-item"><span class="dot match-b"></span> Type B Donor</div>
+                <div class="legend-item"><span class="dot match-ab"></span> Type AB Donor</div>
+            </div>
+        </main>
+        
+        <!-- Persistent Copyright Watermark -->
+        <div class="vipul-copyright">
+            © First Placement by Vipul Sharma
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
