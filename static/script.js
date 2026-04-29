@@ -344,4 +344,177 @@ document.addEventListener('DOMContentLoaded', () => {
         el.classList.add('animate');
         el.textContent = target;
     }
+
+
+    // ══════════════════════════════════════════════════════════
+    //  MIAM Algorithm Integration
+    // ══════════════════════════════════════════════════════════
+
+    const runMiamBtn      = document.getElementById('runMiamBtn');
+    const miamBtnText     = document.getElementById('miamBtnText');
+    const miamLoader      = document.getElementById('miamLoader');
+    const miamStats       = document.getElementById('miamStats');
+    const miamCompare     = document.getElementById('miamCompare');
+    const miamVerdict     = document.getElementById('miamVerdict');
+    const toggleConflicts = document.getElementById('toggleConflicts');
+
+    let conflictEdgesData  = [];   // raw {from,to} list from API
+    let conflictEdgesVis   = [];   // vis edge IDs added to the graph
+    let showingConflicts   = false;
+    let miamSolutionNodes  = [];   // nodes in FPT MIAM solution
+
+    // Enable the MIAM button once the graph is loaded
+    function enableMiam() {
+        runMiamBtn.disabled    = false;
+        miamBtnText.textContent = 'Run MIAM Algorithm';
+    }
+
+    // Call enableMiam after successful graph load
+    const _origLoad = btnLoad.onclick;
+    btnLoad.addEventListener('click', () => {
+        // Will be enabled after fetchCycles resolves (hooked below)
+    });
+
+    // ── Run MIAM ──────────────────────────────────────────────
+    runMiamBtn.addEventListener('click', async () => {
+        runMiamBtn.disabled     = true;
+        miamBtnText.textContent = 'Computing…';
+        miamLoader.classList.remove('hidden');
+        hudStatus.textContent   = 'Running MIAM algorithm…';
+
+        try {
+            const res  = await fetch('/api/miam');
+            const data = await res.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            renderMiamResults(data);
+            hudStatus.textContent = `MIAM complete — FPT solution: ${data.fpt.size} pairs, weight ${data.fpt.weight}`;
+
+        } catch (e) {
+            console.error(e);
+            hudStatus.textContent = 'MIAM error';
+        } finally {
+            runMiamBtn.disabled     = false;
+            miamBtnText.textContent = 'Re-run MIAM';
+            miamLoader.classList.add('hidden');
+        }
+    });
+
+    // ── Render MIAM results ───────────────────────────────────
+    function renderMiamResults(data) {
+        const { greedy, fpt, n_conflict_edges, conflict_edges } = data;
+
+        // Save conflict edges for toggle
+        conflictEdgesData = conflict_edges || [];
+
+        // Stats panel
+        document.getElementById('miamConflicts').textContent = n_conflict_edges;
+        document.getElementById('miamKernel').textContent    = fpt.kernel_size + ' nodes';
+        document.getElementById('miamReduction').textContent = fpt.kernel_reduction + '%';
+        miamStats.classList.remove('hidden');
+
+        // Comparison table
+        document.getElementById('cmpGreedySize').textContent = greedy.size;
+        document.getElementById('cmpFptSize').textContent    = fpt.size;
+        document.getElementById('cmpGreedyW').textContent    = greedy.weight;
+        document.getElementById('cmpFptW').textContent       = fpt.weight;
+        document.getElementById('cmpGreedyT').textContent    = greedy.time_ms + ' ms';
+        document.getElementById('cmpFptT').textContent       = fpt.time_ms + ' ms';
+        miamCompare.classList.remove('hidden');
+
+        // Verdict
+        miamVerdict.classList.remove('hidden');
+        const weightDiff = data.weight_improvement;
+        const sizeDiff   = data.size_improvement;
+        if (weightDiff > 0) {
+            miamVerdict.innerHTML =
+                `🏆 <strong style="color:var(--purple)">FPT MIAM</strong> found a better solution: ` +
+                `+${weightDiff} weight, +${sizeDiff} pairs vs greedy. ` +
+                `Kernel reduced graph by <strong>${fpt.kernel_reduction}%</strong>.`;
+        } else {
+            miamVerdict.innerHTML =
+                `Greedy matched FPT quality on this instance (common for small graphs). ` +
+                `Kernel: <strong style="color:var(--gold)">${fpt.kernel_size}</strong> / ${fpt.original_size} nodes.`;
+        }
+
+        // Highlight MIAM solution nodes in the graph (orange glow)
+        miamSolutionNodes = fpt.solution || [];
+        highlightMiamNodes(miamSolutionNodes);
+
+        // Show conflict toggle
+        toggleConflicts.classList.remove('hidden');
+    }
+
+    // ── Highlight MIAM solution nodes ─────────────────────────
+    function highlightMiamNodes(nodeIds) {
+        const updates = [];
+        nodesDataset.forEach(n => {
+            if (nodeIds.includes(n.id)) {
+                updates.push({
+                    id: n.id,
+                    borderWidth: 3,
+                    color: {
+                        background: n.color?.background || '#4a5060',
+                        border: '#f0c060',
+                        highlight: { background: '#f0c060', border: '#fff' }
+                    },
+                    shadow: { enabled: true, color: '#f0c060', size: 18 }
+                });
+            } else {
+                updates.push({ id: n.id, borderWidth: 1.5,
+                    shadow: { enabled: true, size: 6, color: n.color?.background || '#4a5060' }
+                });
+            }
+        });
+        nodesDataset.update(updates);
+    }
+
+    // ── Toggle conflict edges overlay ─────────────────────────
+    toggleConflicts.addEventListener('click', () => {
+        if (showingConflicts) {
+            // Remove conflict edges
+            edgesDataset.remove(conflictEdgesVis);
+            conflictEdgesVis = [];
+            showingConflicts = false;
+            toggleConflicts.classList.remove('active');
+            toggleConflicts.innerHTML = `
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                Show conflict edges`;
+        } else {
+            // Add conflict edges as dashed red
+            const toAdd = conflictEdgesData.map((e, i) => ({
+                id:     `conflict_${i}`,
+                from:   e.from,
+                to:     e.to,
+                color:  { color: 'rgba(247,129,102,0.5)', highlight: '#f78166' },
+                width:  1,
+                dashes: [4, 4],
+                arrows: { to: { enabled: false } },
+                shadow: { enabled: false },
+                title:  'Conflict edge (resource constraint)'
+            }));
+            edgesDataset.add(toAdd);
+            conflictEdgesVis = toAdd.map(e => e.id);
+            showingConflicts = true;
+            toggleConflicts.classList.add('active');
+            toggleConflicts.innerHTML = `
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                Hide conflict edges`;
+        }
+    });
+
+    // Enable MIAM button once graph data is ready
+    // Patch fetchCycles to call enableMiam at the end
+    const _origFetchCycles = fetchCycles;
+    async function fetchCycles() {
+        await _origFetchCycles.apply(this, arguments);
+        enableMiam();
+    }
+    // Override: re-export so the load handler calls new version
+    window.__fetchCycles = fetchCycles;
 });
+

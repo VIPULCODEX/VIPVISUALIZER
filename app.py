@@ -1,87 +1,118 @@
 # Copyright (c) First Placement by Vipul Sharma
 # All rights reserved. Do not remove this notice.
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 import os
-from kidney_exchange import KidneyExchange
+from kidney_exchange import KidneyExchange, MIAMSolver
 
 app = Flask(__name__)
 
-# Cache results
-cached_graph_data = None
-cached_cycles_data = None
+# ── In-memory cache ──────────────────────────────────────────
+_cache = {
+    'graph':  None,   # {nodes, edges}
+    'cycles': None,   # {cycles, count, times}
+    'kx':     None,   # KidneyExchange instance (kept for MIAM)
+}
+
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+
+# ── Load dataset & build graph ───────────────────────────────
 @app.route('/api/load')
 def load_data():
-    global cached_graph_data, cached_cycles_data
-    
-    # Get the number of nodes requested from the query parameters, defaulting to 50
-    from flask import request
     num_nodes = request.args.get('nodes', default=50, type=int)
-    
-    csv_path = os.path.join(os.path.dirname(__file__), 'Kidney_Organ_SupplyChain_RawDataset.csv')
-    
+    csv_path  = os.path.join(os.path.dirname(__file__),
+                             'Kidney_Organ_SupplyChain_RawDataset.csv')
+
     kx = KidneyExchange()
-    success = kx.load_from_csv(csv_path, max_rows=num_nodes)
-    
-    if not success:
-        return jsonify({"error": "Failed to load CSV"})
-        
+    if not kx.load_from_csv(csv_path, max_rows=num_nodes):
+        return jsonify({'error': 'Failed to load CSV'})
+
     kx.build_graph()
-    
-    # Build graph payload
-    nodes = [{"id": k, "label": f"{k} ({v['donor']}->{v['recipient']})", "donor_bg": v['donor'], "recipient_bg": v['recipient']} for k, v in kx.nodes.items()]
-    edges = []
-    for u, neighbors in kx.adj_list.items():
-        for v in neighbors:
-            edges.append({"from": u, "to": v})
-            
-    cached_graph_data = {"nodes": nodes, "edges": edges}
-    
-    # Pre-calculate cycles
-    cycles = kx.find_cycles(max_length=3)
-    
-    cycle_results = []
-    total_induced_time = 0
-    total_acyclic_time = 0
-    
+    _cache['kx'] = kx   # keep reference for MIAM
+
+    # Graph payload
+    nodes = [
+        {
+            'id':           k,
+            'label':        f"{k} ({v['donor']}→{v['recipient']})",
+            'donor_bg':     v['donor'],
+            'recipient_bg': v['recipient'],
+        }
+        for k, v in kx.nodes.items()
+    ]
+    edges = [
+        {'from': u, 'to': v}
+        for u, nbrs in kx.adj_list.items()
+        for v in nbrs
+    ]
+    _cache['graph'] = {'nodes': nodes, 'edges': edges}
+
+    # Cycle analysis
+    cycles           = kx.find_cycles(max_length=3)
+    total_t_induced  = 0
+    total_t_acyclic  = 0
+    cycle_results    = []
+
     for cycle in cycles:
-        matching = kx.extract_matching(cycle)
-        is_induced, time_induced = kx.is_induced_matching(cycle)
-        is_acyclic, time_acyclic = kx.is_acyclic_matching(matching)
-        
-        total_induced_time += time_induced
-        total_acyclic_time += time_acyclic
-        
+        matching              = kx.extract_matching(cycle)
+        is_ind, t_ind         = kx.is_induced_matching(cycle)
+        is_acy, t_acy         = kx.is_acyclic_matching(matching)
+        total_t_induced      += t_ind
+        total_t_acyclic      += t_acy
         cycle_results.append({
-            "cycle": cycle,
-            "matching": matching,
-            "is_induced": is_induced,
-            "time_induced_ms": time_induced * 1000,
-            "is_acyclic": is_acyclic,
-            "time_acyclic_ms": time_acyclic * 1000
+            'cycle':           cycle,
+            'matching':        matching,
+            'is_induced':      is_ind,
+            'time_induced_ms': t_ind * 1000,
+            'is_acyclic':      is_acy,
+            'time_acyclic_ms': t_acy * 1000,
         })
-        
-    cached_cycles_data = {
-        "cycles": cycle_results,
-        "total_induced_time_ms": total_induced_time * 1000,
-        "total_acyclic_time_ms": total_acyclic_time * 1000,
-        "count": len(cycles)
+
+    _cache['cycles'] = {
+        'cycles':               cycle_results,
+        'count':                len(cycles),
+        'total_induced_time_ms': total_t_induced * 1000,
+        'total_acyclic_time_ms': total_t_acyclic * 1000,
     }
-    
-    return jsonify({"success": True})
+
+    return jsonify({'success': True})
+
 
 @app.route('/api/graph')
 def get_graph():
-    return jsonify(cached_graph_data if cached_graph_data else {"nodes": [], "edges": []})
+    return jsonify(_cache['graph'] or {'nodes': [], 'edges': []})
+
 
 @app.route('/api/cycles')
 def get_cycles():
-    return jsonify(cached_cycles_data if cached_cycles_data else {"cycles": []})
+    return jsonify(_cache['cycles'] or {'cycles': [], 'count': 0})
+
+
+# ── NEW: Run MIAM algorithm ───────────────────────────────────
+@app.route('/api/miam')
+def run_miam():
+    """
+    Run the full MIAM pipeline:
+      1. Build conflict graph C (hospital/crossmatch resource simulation)
+      2. Assign weights (blood-type rarity + urgency proxy)
+      3. Kernelise with 3 weighted reduction rules
+      4. Run greedy baseline  (O(n²))
+      5. Run FPT algorithm    (O(2^k · n) on kernel)
+      6. Return comparison + conflict edges for frontend visualisation
+    """
+    if _cache['kx'] is None:
+        return jsonify({'error': 'Load graph first via /api/load'})
+
+    num_hospitals = request.args.get('hospitals', default=6, type=int)
+
+    solver = MIAMSolver(_cache['kx'])
+    result = solver.run(num_hospitals=num_hospitals)
+    return jsonify(result)
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
