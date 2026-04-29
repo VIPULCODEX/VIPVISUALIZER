@@ -1,73 +1,155 @@
+/* ============================================================
+   VIPvisualize — Premium JavaScript
+   Author: Vipul Sharma
+   ============================================================ */
+
 document.addEventListener('DOMContentLoaded', () => {
-    const btnLoad = document.getElementById('loadGraphBtn');
-    const loader = document.querySelector('.loader');
-    const btnText = document.querySelector('.btn-text');
-    
-    // UI Elements
-    const elNodeCount = document.getElementById('nodeCount');
-    const elEdgeCount = document.getElementById('edgeCount');
-    const elCycleCount = document.getElementById('cycleCount');
-    const elTimeInduced = document.getElementById('timeInduced');
-    const elTimeAcyclic = document.getElementById('timeAcyclic');
-    const elCycleList = document.getElementById('cycleList');
-    const elConclusions = document.getElementById('benchmarkConclusion');
-    const placeholder = document.querySelector('.placeholder-text');
 
-    let network = null;
-    let nodesDataset = new vis.DataSet();
-    let edgesDataset = new vis.DataSet();
-    
-    let cyclesData = [];
+    // ── Background Canvas Animation ────────────────────────────
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
 
-    // Blood type colors
+    let W, H, particles = [];
+
+    function resizeCanvas() {
+        W = canvas.width  = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+
+    function createParticles() {
+        particles = [];
+        const count = Math.floor((W * H) / 18000);
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x: Math.random() * W,
+                y: Math.random() * H,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: (Math.random() - 0.5) * 0.3,
+                r:  Math.random() * 1.5 + 0.5,
+                alpha: Math.random() * 0.4 + 0.1
+            });
+        }
+    }
+
+    function drawBg() {
+        ctx.clearRect(0, 0, W, H);
+        // Draw connections
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const dx = particles[i].x - particles[j].x;
+                const dy = particles[i].y - particles[j].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 120) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(88,166,255,${0.08 * (1 - dist / 120)})`;
+                    ctx.lineWidth = 0.6;
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+        // Draw nodes
+        for (const p of particles) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(88,166,255,${p.alpha})`;
+            ctx.fill();
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0 || p.x > W) p.vx *= -1;
+            if (p.y < 0 || p.y > H) p.vy *= -1;
+        }
+        requestAnimationFrame(drawBg);
+    }
+
+    resizeCanvas();
+    createParticles();
+    drawBg();
+    window.addEventListener('resize', () => { resizeCanvas(); createParticles(); });
+
+
+    // ── DOM References ─────────────────────────────────────────
+    const btnLoad        = document.getElementById('loadGraphBtn');
+    const btnText        = document.getElementById('btnText');
+    const btnLoader      = document.getElementById('btnLoader');
+    const btnIcon        = document.querySelector('.btn-icon');
+
+    const elNodeCount    = document.getElementById('nodeCount');
+    const elEdgeCount    = document.getElementById('edgeCount');
+    const elCycleCount   = document.getElementById('cycleCount');
+    const elTimeInduced  = document.getElementById('timeInduced');
+    const elTimeAcyclic  = document.getElementById('timeAcyclic');
+    const elCycleList    = document.getElementById('cycleList');
+    const cycleBadge     = document.getElementById('cycleBadge');
+    const conclusionBox  = document.getElementById('conclusionBox');
+    const conclusionText = document.getElementById('benchmarkConclusion');
+    const barInduced     = document.getElementById('barInduced');
+    const barAcyclic     = document.getElementById('barAcyclic');
+    const hudStatus      = document.getElementById('hudStatus');
+    const selectedCycleInfo = document.getElementById('selectedCycleInfo');
+    const selectedCycleText = document.getElementById('selectedCycleText');
+    const graphPlaceholder  = document.getElementById('graphPlaceholder');
+
+
+    // ── vis-network Setup ──────────────────────────────────────
+    let network       = null;
+    let nodesDataset  = new vis.DataSet();
+    let edgesDataset  = new vis.DataSet();
+    let cyclesData    = [];
+    let activeIdx     = -1;
+
     const bloodColors = {
-        'O': '#f78166',
-        'A': '#58a6ff',
-        'B': '#3fb950',
+        'O':  '#f78166',
+        'A':  '#58a6ff',
+        'B':  '#3fb950',
         'AB': '#bc8cff'
     };
 
     function initNetwork() {
         const container = document.getElementById('networkMap');
-        const data = {
-            nodes: nodesDataset,
-            edges: edgesDataset
-        };
+        const data    = { nodes: nodesDataset, edges: edgesDataset };
         const options = {
             nodes: {
                 shape: 'dot',
-                size: 20,
+                size: 14,
                 font: {
-                    color: '#c9d1d9',
+                    color: 'rgba(230,237,243,0.85)',
                     face: 'Inter',
-                    size: 12
+                    size: 11,
+                    strokeWidth: 2,
+                    strokeColor: 'rgba(0,0,0,0.6)'
                 },
-                borderWidth: 2,
-                shadow: true
+                borderWidth: 1.5,
+                borderWidthSelected: 3,
+                shadow: { enabled: true, size: 12, x: 0, y: 0 }
             },
             edges: {
-                width: 1.5,
-                color: { color: 'rgba(255,255,255,0.2)' },
-                arrows: {
-                    to: { enabled: true, scaleFactor: 0.5 }
-                },
-                smooth: { type: 'continuous' }
+                width: 1,
+                color: { color: 'rgba(255,255,255,0.08)', highlight: '#f0c060', hover: 'rgba(255,255,255,0.25)' },
+                arrows: { to: { enabled: true, scaleFactor: 0.4, type: 'arrow' } },
+                smooth: { type: 'curvedCW', roundness: 0.1 },
+                selectionWidth: 2
             },
             physics: {
                 forceAtlas2Based: {
-                    gravitationalConstant: -50,
-                    centralGravity: 0.01,
-                    springLength: 100,
-                    springConstant: 0.08
+                    gravitationalConstant: -55,
+                    centralGravity: 0.008,
+                    springLength: 110,
+                    springConstant: 0.07,
+                    damping: 0.4
                 },
-                maxVelocity: 50,
+                maxVelocity: 80,
                 solver: 'forceAtlas2Based',
                 timestep: 0.35,
-                stabilization: { iterations: 150 }
+                stabilization: { iterations: 200, updateInterval: 25 }
             },
             interaction: {
                 hover: true,
-                tooltipDelay: 200
+                tooltipDelay: 150,
+                hideEdgesOnDrag: true,
+                navigationButtons: false,
+                keyboard: false
             }
         };
         network = new vis.Network(container, data, options);
@@ -75,53 +157,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initNetwork();
 
-    btnLoad.addEventListener('click', async () => {
-        // loading state
-        btnLoad.disabled = true;
-        btnText.textContent = "Processing...";
-        loader.classList.remove('hidden');
-        placeholder.style.display = 'none';
 
-        const numNodes = document.getElementById('nodeInput').value || 50;
+    // ── Load Button ────────────────────────────────────────────
+    btnLoad.addEventListener('click', async () => {
+        const numNodes = parseInt(document.getElementById('nodeInput').value) || 50;
+
+        // Loading state
+        btnLoad.disabled = true;
+        btnText.textContent = 'Analysing…';
+        btnLoader.classList.remove('hidden');
+        btnIcon.classList.add('hidden');
+        graphPlaceholder.style.display = 'none';
+        hudStatus.textContent = 'Loading dataset…';
 
         try {
-            // Trigger backend load with node count
             const resLoad = await fetch(`/api/load?nodes=${numNodes}`);
             const dataLoad = await resLoad.json();
 
-            if(dataLoad.success) {
-                // Fetch graph + cycles
+            if (dataLoad.success) {
+                hudStatus.textContent = 'Building graph…';
                 await Promise.all([fetchGraph(), fetchCycles()]);
+                hudStatus.textContent = `Graph loaded — ${numNodes} patients visualised`;
             } else {
-                alert("Failed to load generic data");
+                hudStatus.textContent = 'Error loading data';
+                alert('Failed to load dataset from server.');
             }
-
-        } catch(e) {
+        } catch (e) {
             console.error(e);
-            alert("Error loading graph data.");
+            hudStatus.textContent = 'Network error';
+            alert('Could not reach the server. Is Flask running?');
         } finally {
             btnLoad.disabled = false;
-            btnText.textContent = "Load Patient Graph";
-            loader.classList.add('hidden');
+            btnText.textContent = 'Reload Graph';
+            btnLoader.classList.add('hidden');
+            btnIcon.classList.remove('hidden');
         }
     });
 
-    async function fetchGraph() {
-        const res = await fetch('/api/graph');
-        const data = await res.json();
-        
-        elNodeCount.textContent = data.nodes.length;
-        elEdgeCount.textContent = data.edges.length;
 
-        // format visual nodes
+    // ── Fetch Graph ────────────────────────────────────────────
+    async function fetchGraph() {
+        const res  = await fetch('/api/graph');
+        const data = await res.json();
+
+        animateValue(elNodeCount, data.nodes.length);
+        animateValue(elEdgeCount, data.edges.length);
+
         const visNodes = data.nodes.map(n => ({
             id: n.id,
             label: n.id,
-            title: `Patient: ${n.id}<br>Donor: ${n.donor_bg}<br>Recipient: ${n.recipient_bg}`,
+            title: `<div style="font-family:Inter,sans-serif;font-size:12px;padding:4px 0">
+                        <b style="color:#e6edf3">${n.id}</b><br>
+                        <span style="color:#7d8590">Donor: </span><b style="color:${bloodColors[n.donor_bg] || '#fff'}">${n.donor_bg}</b><br>
+                        <span style="color:#7d8590">Recipient: </span><b style="color:${bloodColors[n.recipient_bg] || '#fff'}">${n.recipient_bg}</b>
+                    </div>`,
             color: {
-                background: bloodColors[n.donor_bg] || '#555',
-                border: '#ffffff'
-            }
+                background: bloodColors[n.donor_bg] || '#4a5060',
+                border: 'rgba(255,255,255,0.2)',
+                highlight: { background: '#f0c060', border: '#f0c060' },
+                hover: { background: bloodColors[n.donor_bg] || '#4a5060', border: 'rgba(255,255,255,0.6)' }
+            },
+            shadow: { color: bloodColors[n.donor_bg] || '#4a5060' }
         }));
 
         nodesDataset.clear();
@@ -130,66 +226,122 @@ document.addEventListener('DOMContentLoaded', () => {
         edgesDataset.add(data.edges);
     }
 
+
+    // ── Fetch Cycles ───────────────────────────────────────────
     async function fetchCycles() {
-        const res = await fetch('/api/cycles');
+        const res  = await fetch('/api/cycles');
         const data = await res.json();
-        
-        elCycleCount.textContent = data.count;
-        elTimeInduced.textContent = `${data.total_induced_time_ms.toFixed(2)} ms`;
-        elTimeAcyclic.textContent = `${data.total_acyclic_time_ms.toFixed(2)} ms`;
-        
-        cyclesData = data.cycles;
-        
+
+        const count = data.count || 0;
+        animateValue(elCycleCount, count);
+        cycleBadge.textContent = count;
+
+        const tInd = (data.total_induced_time_ms || 0).toFixed(3);
+        const tAcy = (data.total_acyclic_time_ms || 0).toFixed(3);
+        elTimeInduced.textContent = `${tInd} ms`;
+        elTimeAcyclic.textContent = `${tAcy} ms`;
+
+        // Animated bars (relative)
+        const maxT = Math.max(parseFloat(tInd), parseFloat(tAcy), 0.001);
+        setTimeout(() => {
+            barInduced.style.width = `${(parseFloat(tInd) / maxT * 100).toFixed(1)}%`;
+            barAcyclic.style.width = `${(parseFloat(tAcy) / maxT * 100).toFixed(1)}%`;
+        }, 200);
+
+        // Conclusion
+        if (count > 0) {
+            conclusionBox.classList.remove('hidden', 'winner-blue', 'winner-purple');
+            if (parseFloat(tAcy) < parseFloat(tInd)) {
+                conclusionBox.classList.add('winner-purple');
+                conclusionText.innerHTML = `🏆 <strong>Acyclic Matching</strong> was faster — Δ ${(parseFloat(tInd) - parseFloat(tAcy)).toFixed(3)} ms`;
+            } else {
+                conclusionBox.classList.add('winner-blue');
+                conclusionText.innerHTML = `🏆 <strong>Induced Matching</strong> was faster — Δ ${(parseFloat(tAcy) - parseFloat(tInd)).toFixed(3)} ms`;
+            }
+        }
+
+        // Cycle List
+        cyclesData = data.cycles || [];
         elCycleList.innerHTML = '';
+        activeIdx = -1;
+
         if (cyclesData.length === 0) {
-            elCycleList.innerHTML = '<li class="empty-state">No cycles found ≤ 3 length</li>';
+            elCycleList.innerHTML = '<li class="cycle-empty">No exchange cycles of length ≤ 3 found</li>';
         } else {
             cyclesData.forEach((c, idx) => {
                 const li = document.createElement('li');
-                li.innerHTML = `<strong>Cycle ${idx+1}:</strong> ${c.cycle.join(' → ')}`;
-                li.addEventListener('click', () => highlightCycle(c.cycle));
+                li.innerHTML = `<span class="cycle-num">#${idx + 1}</span>${c.cycle.join(' → ')}`;
+                li.addEventListener('click', () => highlightCycle(c.cycle, idx, li));
                 elCycleList.appendChild(li);
             });
         }
-
-        // Conclusion
-        if(data.count > 0) {
-            elConclusions.style.display = 'block';
-            if(data.total_acyclic_time_ms < data.total_induced_time_ms) {
-                elConclusions.innerHTML = `The <strong>Acyclic Matching</strong> check ran <strong>faster</strong> than Induced Matching for this batch!`;
-                elConclusions.style.color = 'var(--accent-green)';
-            } else {
-                elConclusions.innerHTML = `The <strong>Induced Matching</strong> check ran <strong>faster</strong> than Acyclic Matching for this batch!`;
-                elConclusions.style.color = 'var(--accent-blue)';
-            }
-        }
     }
 
-    function highlightCycle(cycleNodes) {
-        // Reset edges
+
+    // ── Highlight a Cycle ──────────────────────────────────────
+    function highlightCycle(cycleNodes, idx, el) {
+        // Deactivate old
+        document.querySelectorAll('.cycle-list li').forEach(li => li.classList.remove('active'));
+
+        if (activeIdx === idx) {
+            // Toggle off
+            activeIdx = -1;
+            resetEdgeColors();
+            selectedCycleInfo.style.display = 'none';
+            return;
+        }
+
+        activeIdx = idx;
+        el.classList.add('active');
+
+        // Reset all edges
+        resetEdgeColors();
+
+        // Highlight cycle edges
         const allEdges = edgesDataset.get();
-        const resetEdges = allEdges.map(e => ({...e, color: { color: 'rgba(255,255,255,0.2)' }, width: 1.5 }));
-        edgesDataset.update(resetEdges);
-        
-        // Find edges inside cycle
-        let cycleEdges = [];
-        for(let i=0; i<cycleNodes.length; i++) {
-            let u = cycleNodes[i];
-            let v = cycleNodes[(i+1)%cycleNodes.length];
-            // find edge ID in vis.js
-            let edge = allEdges.find(e => e.from === u && e.to === v);
-            if(edge) {
-                cycleEdges.push({id: edge.id, color: { color: '#bc8cff' }, width: 3});
+        const updates  = [];
+        for (let i = 0; i < cycleNodes.length; i++) {
+            const u = cycleNodes[i];
+            const v = cycleNodes[(i + 1) % cycleNodes.length];
+            const edge = allEdges.find(e => e.from === u && e.to === v);
+            if (edge) {
+                updates.push({
+                    id: edge.id,
+                    color: { color: '#f0c060', highlight: '#f0c060' },
+                    width: 3,
+                    shadow: { enabled: true, color: '#f0c060', size: 12 }
+                });
             }
         }
-        edgesDataset.update(cycleEdges);
+        edgesDataset.update(updates);
 
         // Focus network
-        if(network) {
-            network.fit({
-                nodes: cycleNodes,
-                animation: { duration: 1000, easingFunction: "easeInOutQuad" }
-            });
-        }
+        network.fit({
+            nodes: cycleNodes,
+            animation: { duration: 800, easingFunction: 'easeInOutCubic' }
+        });
+
+        // HUD update
+        selectedCycleInfo.style.display = 'flex';
+        selectedCycleText.textContent = `Cycle #${idx + 1}: ${cycleNodes.join(' → ')}`;
+    }
+
+    function resetEdgeColors() {
+        const allEdges = edgesDataset.get();
+        edgesDataset.update(allEdges.map(e => ({
+            ...e,
+            color: { color: 'rgba(255,255,255,0.08)', highlight: '#f0c060', hover: 'rgba(255,255,255,0.25)' },
+            width: 1,
+            shadow: { enabled: false }
+        })));
+    }
+
+
+    // ── Utility: Animate number ────────────────────────────────
+    function animateValue(el, target) {
+        el.classList.remove('animate');
+        void el.offsetWidth; // reflow
+        el.classList.add('animate');
+        el.textContent = target;
     }
 });
