@@ -125,13 +125,80 @@
             </div>
 
             <!-- Cycles List -->
-            <div class="section cycles-section">
+            <div class="section">
                 <div class="section-label">Found Cycles
                     <span class="cycle-badge" id="cycleBadge">0</span>
                 </div>
                 <ul id="cycleList" class="cycle-list">
                     <li class="cycle-empty">Load graph to find exchange cycles</li>
                 </ul>
+            </div>
+
+            <!-- ═══ MIAM Algorithm Section ═══ -->
+            <div class="section miam-section">
+                <div class="section-label">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    MIAM Algorithm
+                    <span class="new-badge">NEW</span>
+                </div>
+                <p class="section-desc">
+                    Mixed Induced-Acyclic Matching with weighted kernelisation + FPT bounded search tree vs greedy baseline.
+                </p>
+
+                <button id="runMiamBtn" class="miam-btn" disabled>
+                    <span class="btn-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </span>
+                    <span id="miamBtnText">Load graph first</span>
+                    <span class="btn-loader hidden" id="miamLoader"></span>
+                </button>
+
+                <!-- Conflict Graph Stats -->
+                <div class="miam-stats hidden" id="miamStats">
+                    <div class="miam-row">
+                        <span class="miam-label">Conflict Edges (C)</span>
+                        <span class="miam-val rose" id="miamConflicts">—</span>
+                    </div>
+                    <div class="miam-row">
+                        <span class="miam-label">Kernel Size</span>
+                        <span class="miam-val gold" id="miamKernel">—</span>
+                    </div>
+                    <div class="miam-row">
+                        <span class="miam-label">Kernel Reduction</span>
+                        <span class="miam-val green" id="miamReduction">—</span>
+                    </div>
+                </div>
+
+                <!-- Algorithm Comparison Table -->
+                <div class="compare-table hidden" id="miamCompare">
+                    <div class="compare-header">
+                        <span></span>
+                        <span class="cth blue">Greedy</span>
+                        <span class="cth purple">FPT (MIAM)</span>
+                    </div>
+                    <div class="compare-row">
+                        <span>Solution size</span>
+                        <span id="cmpGreedySize">—</span>
+                        <span id="cmpFptSize">—</span>
+                    </div>
+                    <div class="compare-row">
+                        <span>Total weight</span>
+                        <span id="cmpGreedyW">—</span>
+                        <span id="cmpFptW">—</span>
+                    </div>
+                    <div class="compare-row">
+                        <span>Runtime</span>
+                        <span id="cmpGreedyT">—</span>
+                        <span id="cmpFptT">—</span>
+                    </div>
+                    <div class="compare-verdict hidden" id="miamVerdict"></div>
+                </div>
+
+                <!-- Toggle conflict edges -->
+                <button class="toggle-btn hidden" id="toggleConflicts">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                    Show conflict edges
+                </button>
             </div>
 
             <!-- Footer -->
