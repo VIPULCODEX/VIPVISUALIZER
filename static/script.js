@@ -178,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 hudStatus.textContent = 'Building graph…';
                 await Promise.all([fetchGraph(), fetchCycles()]);
                 hudStatus.textContent = `Graph loaded — ${numNodes} patients visualised`;
+                enableMiam();  // unlock MIAM button after successful load
             } else {
                 hudStatus.textContent = 'Error loading data';
                 alert('Failed to load dataset from server.');
@@ -507,14 +508,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Enable MIAM button once graph data is ready
-    // Patch fetchCycles to call enableMiam at the end
-    const _origFetchCycles = fetchCycles;
-    async function fetchCycles() {
-        await _origFetchCycles.apply(this, arguments);
-        enableMiam();
-    }
-    // Override: re-export so the load handler calls new version
-    window.__fetchCycles = fetchCycles;
 });
-
