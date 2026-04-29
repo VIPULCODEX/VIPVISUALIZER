@@ -1,1 +1,4 @@
 .vercel
+project_plan.txt
+__pycache__/
+*.pyc
