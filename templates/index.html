@@ -201,6 +201,67 @@
                 </button>
             </div>
 
+            <!-- ===== PS-KCP Hybrid Algorithm Section ===== -->
+            <div class="section miam-section">
+                <div class="section-label">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20"/><path d="M2 12h20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
+                    PS-KCP Hybrid
+                    <span class="new-badge">HYBRID</span>
+                </div>
+                <p class="section-desc">
+                    Preference-Stable Kernelized Cycle Packing selects disjoint 2/3-cycle exchanges using preference scoring, stability checks, and FPT search on a reduced cycle graph.
+                </p>
+
+                <button id="runPskcpBtn" class="miam-btn" disabled>
+                    <span class="btn-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </span>
+                    <span id="pskcpBtnText">Load graph first</span>
+                    <span class="btn-loader hidden" id="pskcpLoader"></span>
+                </button>
+
+                <div class="miam-stats hidden" id="pskcpStats">
+                    <div class="miam-row">
+                        <span class="miam-label">Cycle Candidates</span>
+                        <span class="miam-val blue" id="pskcpCandidates">-</span>
+                    </div>
+                    <div class="miam-row">
+                        <span class="miam-label">Kernel Size</span>
+                        <span class="miam-val gold" id="pskcpKernel">-</span>
+                    </div>
+                    <div class="miam-row">
+                        <span class="miam-label">Stable Violations</span>
+                        <span class="miam-val rose" id="pskcpViolations">-</span>
+                    </div>
+                </div>
+
+                <div class="compare-table hidden" id="pskcpCompare">
+                    <div class="compare-header">
+                        <span></span>
+                        <span class="cth blue">Greedy</span>
+                        <span class="cth purple">PS-KCP</span>
+                    </div>
+                    <div class="compare-row">
+                        <span>Transplants</span>
+                        <span id="psGreedyT">-</span>
+                        <span id="psFptT">-</span>
+                    </div>
+                    <div class="compare-row">
+                        <span>Total weight</span>
+                        <span id="psGreedyW">-</span>
+                        <span id="psFptW">-</span>
+                    </div>
+                    <div class="compare-row">
+                        <span>Runtime</span>
+                        <span id="psGreedyMs">-</span>
+                        <span id="psFptMs">-</span>
+                    </div>
+                    <div class="compare-verdict hidden" id="pskcpVerdict"></div>
+                </div>
+
+                <ul id="pskcpCycleList" class="cycle-list pskcp-list hidden"></ul>
+            </div>
+
             <!-- Footer -->
             <div class="sidebar-footer">
                 © First Placement by Vipul Sharma

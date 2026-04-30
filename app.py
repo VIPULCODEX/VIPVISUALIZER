@@ -3,7 +3,7 @@
 
 from flask import Flask, jsonify, render_template, request
 import os
-from kidney_exchange import KidneyExchange, MIAMSolver
+from kidney_exchange import KidneyExchange, MIAMSolver, PSKCPSolver
 
 app = Flask(__name__)
 
@@ -111,6 +111,34 @@ def run_miam():
 
     solver = MIAMSolver(_cache['kx'])
     result = solver.run(num_hospitals=num_hospitals)
+    return jsonify(result)
+
+
+@app.route('/api/pskcp')
+def run_pskcp():
+    """
+    Run Preference-Stable Kernelized Cycle Packing:
+      1. Generate 2/3-cycle exchange candidates
+      2. Score candidates using dataset-derived recipient preference proxies
+      3. Build a conflict graph over candidate cycles
+      4. Reduce the candidate graph with practical kernel rules
+      5. Compare greedy cycle packing with FPT branch-and-bound on the kernel
+    """
+    if _cache['kx'] is None:
+        return jsonify({'error': 'Load graph first via /api/load'})
+
+    max_candidates = request.args.get('max_candidates', default=350, type=int)
+    max_length = request.args.get('max_length', default=3, type=int)
+    num_hospitals = request.args.get('hospitals', default=6, type=int)
+    top_per_patient = request.args.get('top_per_patient', default=12, type=int)
+
+    solver = PSKCPSolver(_cache['kx'])
+    result = solver.run(
+        max_length=min(max(max_length, 2), 3),
+        max_candidates=min(max(max_candidates, 25), 1000),
+        num_hospitals=min(max(num_hospitals, 1), 25),
+        top_per_patient=min(max(top_per_patient, 3), 30),
+    )
     return jsonify(result)
 
 
