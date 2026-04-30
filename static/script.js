@@ -358,6 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const miamCompare     = document.getElementById('miamCompare');
     const miamVerdict     = document.getElementById('miamVerdict');
     const toggleConflicts = document.getElementById('toggleConflicts');
+    const runPskcpBtn     = document.getElementById('runPskcpBtn');
+    const pskcpBtnText    = document.getElementById('pskcpBtnText');
+    const pskcpLoader     = document.getElementById('pskcpLoader');
+    const pskcpStats      = document.getElementById('pskcpStats');
+    const pskcpCompare    = document.getElementById('pskcpCompare');
+    const pskcpVerdict    = document.getElementById('pskcpVerdict');
+    const pskcpCycleList  = document.getElementById('pskcpCycleList');
 
     let conflictEdgesData  = [];   // raw {from,to} list from API
     let conflictEdgesVis   = [];   // vis edge IDs added to the graph
@@ -368,6 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function enableMiam() {
         runMiamBtn.disabled    = false;
         miamBtnText.textContent = 'Run MIAM Algorithm';
+        runPskcpBtn.disabled    = false;
+        pskcpBtnText.textContent = 'Run PS-KCP Hybrid';
     }
 
     // Call enableMiam after successful graph load
@@ -402,6 +411,36 @@ document.addEventListener('DOMContentLoaded', () => {
             runMiamBtn.disabled     = false;
             miamBtnText.textContent = 'Re-run MIAM';
             miamLoader.classList.add('hidden');
+        }
+    });
+
+    // Run PS-KCP hybrid cycle-packing algorithm
+    runPskcpBtn.addEventListener('click', async () => {
+        runPskcpBtn.disabled     = true;
+        pskcpBtnText.textContent = 'Packing cycles...';
+        pskcpLoader.classList.remove('hidden');
+        hudStatus.textContent    = 'Running PS-KCP hybrid solver...';
+
+        try {
+            const res  = await fetch('/api/pskcp');
+            const data = await res.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            renderPskcpResults(data);
+            hudStatus.textContent =
+                `PS-KCP complete - ${data.fpt.transplants} transplants, ${data.fpt.stability_violations} blocking cycles`;
+
+        } catch (e) {
+            console.error(e);
+            hudStatus.textContent = 'PS-KCP error';
+        } finally {
+            runPskcpBtn.disabled     = false;
+            pskcpBtnText.textContent = 'Re-run PS-KCP';
+            pskcpLoader.classList.add('hidden');
         }
     });
 
@@ -472,6 +511,85 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         nodesDataset.update(updates);
+    }
+
+    function renderPskcpResults(data) {
+        const { greedy, fpt } = data;
+
+        document.getElementById('pskcpCandidates').textContent = data.candidate_count;
+        document.getElementById('pskcpKernel').textContent = `${fpt.kernel_size} cycles`;
+        document.getElementById('pskcpViolations').textContent = fpt.stability_violations;
+        pskcpStats.classList.remove('hidden');
+
+        document.getElementById('psGreedyT').textContent = greedy.transplants;
+        document.getElementById('psFptT').textContent = fpt.transplants;
+        document.getElementById('psGreedyW').textContent = greedy.weight.toFixed(1);
+        document.getElementById('psFptW').textContent = fpt.weight.toFixed(1);
+        document.getElementById('psGreedyMs').textContent = `${greedy.time_ms} ms`;
+        document.getElementById('psFptMs').textContent = `${fpt.time_ms} ms`;
+        pskcpCompare.classList.remove('hidden');
+
+        const transplantDiff = data.transplant_improvement;
+        const stabilityDiff = data.stability_improvement;
+        pskcpVerdict.classList.remove('hidden');
+        const fallbackText = fpt.used_greedy_fallback
+            ? ' Greedy seed retained because the bounded kernel search did not improve it.'
+            : '';
+        pskcpVerdict.innerHTML =
+            `<strong style="color:var(--purple)">PS-KCP</strong> selected ${fpt.size} exchange cycles. ` +
+            `Kernel reduction: <strong>${fpt.kernel_reduction}%</strong>. ` +
+            `Delta vs greedy: ${transplantDiff >= 0 ? '+' : ''}${transplantDiff} transplants, ` +
+            `${stabilityDiff >= 0 ? '+' : ''}${stabilityDiff} fewer blocking cycles.` +
+            fallbackText;
+
+        renderPskcpCycleList(fpt.cycles || []);
+        highlightPskcpCycles(data.selected_edges || [], data.selected_nodes || []);
+    }
+
+    function renderPskcpCycleList(cycles) {
+        pskcpCycleList.innerHTML = '';
+        pskcpCycleList.classList.remove('hidden');
+
+        if (cycles.length === 0) {
+            pskcpCycleList.innerHTML = '<li class="cycle-empty">No stable cycle packing selected</li>';
+            return;
+        }
+
+        cycles.slice(0, 8).forEach(cycle => {
+            const li = document.createElement('li');
+            const path = cycle.nodes.join(' -> ');
+            li.innerHTML = `
+                <span><span class="cycle-num">${cycle.id}</span>${path}</span>
+                <span class="cycle-meta">${cycle.transplants} transplants | weight ${cycle.weight.toFixed(1)} | pref ${cycle.preference_gain.toFixed(1)}</span>`;
+            li.addEventListener('click', () => {
+                document.querySelectorAll('.pskcp-list li').forEach(item => item.classList.remove('active'));
+                li.classList.add('active');
+                highlightPskcpCycles(cycle.edges || [], cycle.nodes || []);
+                selectedCycleInfo.style.display = 'flex';
+                selectedCycleText.textContent = `PS-KCP ${cycle.id}: ${path}`;
+            });
+            pskcpCycleList.appendChild(li);
+        });
+    }
+
+    function highlightPskcpCycles(selectedEdges, selectedNodes) {
+        resetEdgeColors();
+        highlightMiamNodes(selectedNodes);
+
+        const allEdges = edgesDataset.get();
+        const updates = [];
+        selectedEdges.forEach(edgeInfo => {
+            const edge = allEdges.find(e => e.from === edgeInfo.from && e.to === edgeInfo.to);
+            if (edge) {
+                updates.push({
+                    id: edge.id,
+                    color: { color: '#3fb950', highlight: '#f0c060', hover: '#3fb950' },
+                    width: 4,
+                    shadow: { enabled: true, color: '#3fb950', size: 14 }
+                });
+            }
+        });
+        edgesDataset.update(updates);
     }
 
     // ── Toggle conflict edges overlay ─────────────────────────

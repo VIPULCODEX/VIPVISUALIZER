@@ -5,6 +5,7 @@ import pandas as pd
 import time
 import random
 import hashlib
+from dataclasses import dataclass
 
 
 # ─────────────────────────────────────────────────────────────
@@ -34,16 +35,42 @@ class KidneyExchange:
             if max_rows:
                 df = df.head(max_rows)
             for _, row in df.iterrows():
+                pair_id = str(row['Patient_ID']).strip()
                 self.add_pair(
-                    str(row['Patient_ID']).strip(),
+                    pair_id,
                     str(row['Donor_BloodType']).strip().upper(),
                     str(row['Patient_BloodType']).strip().upper(),
                 )
+                self.nodes[pair_id].update({
+                    'patient_age': self._safe_float(row.get('Patient_Age'), 0),
+                    'patient_weight': self._safe_float(row.get('Patient_Weight'), 0),
+                    'patient_bmi': self._safe_float(row.get('Patient_BMI'), 0),
+                    'diagnosis': str(row.get('Diagnosis_Result', '')).strip(),
+                    'biological_markers': self._safe_float(row.get('Biological_Markers'), 0),
+                    'organ_status': str(row.get('Organ_Status', '')).strip(),
+                    'donor_id': str(row.get('Donor_ID', '')).strip(),
+                    'donor_age': self._safe_float(row.get('Donor_Age'), 0),
+                    'donor_weight': self._safe_float(row.get('Donor_Weight'), 0),
+                    'donor_approved': str(row.get('Donor_Medical_Approval', '')).strip().lower() == 'yes',
+                    'match_status': str(row.get('Match_Status', '')).strip(),
+                    'organ_health': self._safe_float(row.get('RealTime_Organ_HealthScore'), 0),
+                    'organ_alert': str(row.get('Organ_Condition_Alert', '')).strip(),
+                    'survival': self._safe_float(row.get('Predicted_Survival_Chance'), 0),
+                    'scan_time': str(row.get('Timestamp_Organ_Scanned', '')).strip(),
+                })
             print(f"Loaded {len(self.nodes)} pairs from {file_path}")
             return True
         except Exception as e:
             print(f"CSV load error: {e}")
             return False
+
+    def _safe_float(self, value, default=0):
+        try:
+            if pd.isna(value):
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
     def can_donate(self, donor, recipient):
         return recipient in _DONATE_RULES.get(donor, [])
@@ -165,6 +192,390 @@ _PAIR_WEIGHT = {
     ('B',  'B'):  2, ('B',  'AB'): 3,
     ('AB', 'AB'): 1,
 }
+
+
+@dataclass(frozen=True)
+class CycleCandidate:
+    """One executable kidney exchange cycle represented as a meta-node."""
+    id: str
+    nodes: tuple
+    edges: tuple
+    weight: float
+    transplant_count: int
+    preference_gain: float
+    stability_margin: float
+
+
+class PSKCPSolver:
+    """
+    Preference-Stable Kernelized Cycle Packing.
+
+    The solver upgrades the prototype MIAM idea from selecting patient-pair
+    vertices to selecting disjoint 2/3-cycle exchange candidates.
+    """
+
+    def __init__(self, kx: KidneyExchange):
+        self.kx = kx
+        self.candidates = {}
+        self.conflict_adj = {}
+        self.preference_cache = {}
+        self.hospital_cache = {}
+
+    def _stable_bucket(self, value: str, modulo: int) -> int:
+        digest = hashlib.sha256(str(value).encode('utf-8')).hexdigest()
+        return int(digest[:12], 16) % modulo
+
+    def _diagnosis_urgency(self, diagnosis: str) -> float:
+        text = diagnosis.lower()
+        if 'esrd' in text or 'stage 5' in text:
+            return 3.0
+        if 'stage 4' in text:
+            return 2.0
+        if 'stage 3' in text:
+            return 1.0
+        return 0.5
+
+    def _patient_priority(self, pair_id: str) -> float:
+        node = self.kx.nodes[pair_id]
+        survival = node.get('survival', 0) / 100
+        health = node.get('organ_health', 0)
+        urgency = self._diagnosis_urgency(node.get('diagnosis', ''))
+        alert = 0.8 if node.get('organ_alert', '').lower() == 'critical' else 0.2
+        return urgency + survival + health + alert
+
+    def _preference_score(self, recipient_pair: str, donor_pair: str) -> float:
+        key = (recipient_pair, donor_pair)
+        if key in self.preference_cache:
+            return self.preference_cache[key]
+
+        recipient = self.kx.nodes[recipient_pair]
+        donor = self.kx.nodes[donor_pair]
+        donor_quality = donor.get('survival', 0) / 20
+        organ_health = donor.get('organ_health', 0) * 2
+        approval = 1.5 if donor.get('donor_approved') else -0.5
+        age_fit = max(0, 1.5 - abs(donor.get('donor_age', 0) - 35) / 35)
+        weight_fit = max(0, 1.0 - abs(donor.get('donor_weight', 0) - recipient.get('patient_weight', 0)) / 80)
+        blood_bonus = _PAIR_WEIGHT.get((donor.get('donor'), recipient.get('recipient')), 1) / 2
+        score = donor_quality + organ_health + approval + age_fit + weight_fit + blood_bonus
+        self.preference_cache[key] = round(score, 4)
+        return self.preference_cache[key]
+
+    def _cycle_edges(self, cycle):
+        return tuple((cycle[i], cycle[(i + 1) % len(cycle)]) for i in range(len(cycle)))
+
+    def _canonical_cycle(self, cycle):
+        cycle = list(cycle)
+        rotations = [tuple(cycle[i:] + cycle[:i]) for i in range(len(cycle))]
+        return min(rotations)
+
+    def enumerate_cycles(self, max_length=3, max_candidates=350):
+        """Enumerate deterministic 2/3-cycle candidates with a Render-safe cap."""
+        cycles = []
+        seen = set()
+        nodes = sorted(self.kx.nodes)
+
+        for u in nodes:
+            for v in sorted(self.kx.adj_list.get(u, [])):
+                if u < v and u in self.kx.adj_list.get(v, []):
+                    key = self._canonical_cycle([u, v])
+                    if key not in seen:
+                        seen.add(key)
+                        cycles.append(key)
+                        if len(cycles) >= max_candidates:
+                            return cycles
+
+        if max_length >= 3:
+            for u in nodes:
+                for v in sorted(self.kx.adj_list.get(u, [])):
+                    if v == u:
+                        continue
+                    for w in sorted(self.kx.adj_list.get(v, [])):
+                        if w in (u, v):
+                            continue
+                        if u in self.kx.adj_list.get(w, []):
+                            key = self._canonical_cycle([u, v, w])
+                            if key not in seen:
+                                seen.add(key)
+                                cycles.append(key)
+                                if len(cycles) >= max_candidates:
+                                    return cycles
+        return cycles
+
+    def build_candidates(self, max_length=3, max_candidates=350):
+        self.candidates = {}
+        for idx, cycle in enumerate(self.enumerate_cycles(max_length, max_candidates), start=1):
+            edges = self._cycle_edges(cycle)
+            pref_gain = 0
+            priority = 0
+            for donor_pair, recipient_pair in edges:
+                pref_gain += self._preference_score(recipient_pair, donor_pair)
+                priority += self._patient_priority(recipient_pair)
+
+            transplant_count = len(cycle)
+            stability_margin = pref_gain / transplant_count
+            weight = (10 * transplant_count) + pref_gain + priority + stability_margin
+            candidate = CycleCandidate(
+                id=f"X{idx}",
+                nodes=tuple(cycle),
+                edges=edges,
+                weight=round(weight, 4),
+                transplant_count=transplant_count,
+                preference_gain=round(pref_gain, 4),
+                stability_margin=round(stability_margin, 4),
+            )
+            self.candidates[candidate.id] = candidate
+        return self.candidates
+
+    def _hospital(self, pair_id: str, num_hospitals: int) -> int:
+        key = (pair_id, num_hospitals)
+        if key not in self.hospital_cache:
+            self.hospital_cache[key] = self._stable_bucket(pair_id, num_hospitals)
+        return self.hospital_cache[key]
+
+    def _resource_conflict(self, a: CycleCandidate, b: CycleCandidate, num_hospitals: int) -> bool:
+        for u in a.nodes:
+            for v in b.nodes:
+                if (self._hospital(u, num_hospitals) == self._hospital(v, num_hospitals) and
+                        self.kx.nodes[u]['donor'] == self.kx.nodes[v]['donor']):
+                    return True
+        return False
+
+    def build_conflict_graph(self, num_hospitals=6):
+        ids = list(self.candidates)
+        self.conflict_adj = {cid: set() for cid in ids}
+        conflict_edges = []
+
+        for i, aid in enumerate(ids):
+            a = self.candidates[aid]
+            a_nodes = set(a.nodes)
+            for bid in ids[i + 1:]:
+                b = self.candidates[bid]
+                overlap = bool(a_nodes & set(b.nodes))
+                resource = self._resource_conflict(a, b, num_hospitals)
+                if overlap or resource:
+                    self.conflict_adj[aid].add(bid)
+                    self.conflict_adj[bid].add(aid)
+                    conflict_edges.append({'from': aid, 'to': bid, 'type': 'overlap' if overlap else 'resource'})
+        return conflict_edges
+
+    def kernelise(self, top_per_patient=12):
+        """Practical kernel: remove dominated duplicate cycles and cap patient-local choices."""
+        active = set(self.candidates)
+        removed = set()
+        best_by_node_set = {}
+
+        for cid, cand in self.candidates.items():
+            key = frozenset(cand.nodes)
+            old = best_by_node_set.get(key)
+            if old is None or cand.weight > self.candidates[old].weight:
+                if old is not None:
+                    removed.add(old)
+                best_by_node_set[key] = cid
+            else:
+                removed.add(cid)
+
+        active -= removed
+        patient_to_cycles = {}
+        for cid in active:
+            for node in self.candidates[cid].nodes:
+                patient_to_cycles.setdefault(node, []).append(cid)
+
+        for node, ids in patient_to_cycles.items():
+            ranked = sorted(ids, key=lambda cid: self.candidates[cid].weight, reverse=True)
+            removed.update(ranked[top_per_patient:])
+
+        active -= removed
+        forced = set()
+        for cid in list(active):
+            if not (self.conflict_adj.get(cid, set()) & active):
+                forced.add(cid)
+                active.remove(cid)
+
+        blocked_by_forced = set()
+        for cid in forced:
+            blocked_by_forced |= self.conflict_adj.get(cid, set()) & active
+        active -= blocked_by_forced
+        removed |= blocked_by_forced
+
+        return active, forced, removed
+
+    def _can_add(self, cid, chosen):
+        return not (self.conflict_adj.get(cid, set()) & chosen)
+
+    def solve_greedy(self, candidate_ids=None):
+        start = time.perf_counter()
+        ids = candidate_ids or set(self.candidates)
+        chosen = []
+        blocked = set()
+
+        for cid in sorted(ids, key=lambda x: self.candidates[x].weight, reverse=True):
+            if cid in blocked:
+                continue
+            chosen.append(cid)
+            blocked |= self.conflict_adj.get(cid, set())
+
+        elapsed = (time.perf_counter() - start) * 1000
+        return self._solution_payload(chosen, elapsed)
+
+    def solve_fpt(self, max_depth=30, top_per_patient=12):
+        start = time.perf_counter()
+        kernel, forced, removed = self.kernelise(top_per_patient=top_per_patient)
+        kernel_ids = sorted(kernel, key=lambda cid: self.candidates[cid].weight, reverse=True)
+        suffix = [0] * (len(kernel_ids) + 1)
+        for i in range(len(kernel_ids) - 1, -1, -1):
+            suffix[i] = suffix[i + 1] + self.candidates[kernel_ids[i]].weight
+
+        def greedy_complete(start_index, chosen, weight):
+            completed = set(chosen)
+            completed_weight = weight
+            for cid in kernel_ids[start_index:]:
+                if self._can_add(cid, completed):
+                    completed.add(cid)
+                    completed_weight += self.candidates[cid].weight
+            return completed, completed_weight
+
+        seed_ids, seed_weight = greedy_complete(
+            0,
+            set(forced),
+            sum(self.candidates[cid].weight for cid in forced),
+        )
+        best = {'ids': seed_ids, 'weight': seed_weight}
+
+        def search(index, chosen, weight, depth):
+            if index >= len(kernel_ids) or depth >= max_depth:
+                completed, completed_weight = greedy_complete(index, chosen, weight)
+                if completed_weight > best['weight']:
+                    best['ids'] = completed
+                    best['weight'] = completed_weight
+                return
+            if weight + suffix[index] <= best['weight']:
+                return
+
+            cid = kernel_ids[index]
+            if self._can_add(cid, chosen):
+                search(
+                    index + 1,
+                    chosen | {cid},
+                    weight + self.candidates[cid].weight,
+                    depth + 1,
+                )
+            search(index + 1, chosen, weight, depth + 1)
+
+        search(0, set(forced), best['weight'], 0)
+        elapsed = (time.perf_counter() - start) * 1000
+        payload = self._solution_payload(best['ids'], elapsed)
+        payload.update({
+            'kernel_size': len(kernel),
+            'original_size': len(self.candidates),
+            'kernel_reduction': round((1 - len(kernel) / max(len(self.candidates), 1)) * 100, 1),
+            'forced_in': len(forced),
+            'removed': len(removed),
+        })
+        return payload
+
+    def _current_assignment_scores(self, chosen_ids):
+        scores = {}
+        assigned = {}
+        for cid in chosen_ids:
+            for donor_pair, recipient_pair in self.candidates[cid].edges:
+                score = self._preference_score(recipient_pair, donor_pair)
+                scores[recipient_pair] = score
+                assigned[recipient_pair] = donor_pair
+        return scores, assigned
+
+    def count_stability_violations(self, chosen_ids):
+        chosen = set(chosen_ids)
+        current_scores, _ = self._current_assignment_scores(chosen)
+        violations = []
+
+        for cid, cand in self.candidates.items():
+            if cid in chosen:
+                continue
+            blockers = []
+            for donor_pair, recipient_pair in cand.edges:
+                proposed = self._preference_score(recipient_pair, donor_pair)
+                current = current_scores.get(recipient_pair, 0)
+                if proposed <= current + 0.001:
+                    blockers = []
+                    break
+                blockers.append(recipient_pair)
+            if blockers:
+                violations.append(cid)
+
+        return violations
+
+    def _solution_payload(self, chosen_ids, elapsed_ms):
+        chosen = sorted(chosen_ids, key=lambda cid: self.candidates[cid].id)
+        violations = self.count_stability_violations(chosen)
+        cycles = [self._candidate_payload(self.candidates[cid]) for cid in chosen]
+        return {
+            'solution': chosen,
+            'cycles': cycles,
+            'size': len(chosen),
+            'transplants': sum(self.candidates[cid].transplant_count for cid in chosen),
+            'weight': round(sum(self.candidates[cid].weight for cid in chosen), 4),
+            'stability_violations': len(violations),
+            'blocking_cycles': violations[:8],
+            'time_ms': round(elapsed_ms, 4),
+        }
+
+    def _candidate_payload(self, cand: CycleCandidate):
+        return {
+            'id': cand.id,
+            'nodes': list(cand.nodes),
+            'edges': [{'from': u, 'to': v} for u, v in cand.edges],
+            'weight': cand.weight,
+            'transplants': cand.transplant_count,
+            'preference_gain': cand.preference_gain,
+            'stability_margin': cand.stability_margin,
+        }
+
+    def run(self, max_length=3, max_candidates=350, num_hospitals=6, top_per_patient=12):
+        start = time.perf_counter()
+        self.build_candidates(max_length=max_length, max_candidates=max_candidates)
+        conflict_edges = self.build_conflict_graph(num_hospitals=num_hospitals)
+        greedy = self.solve_greedy()
+        fpt = self.solve_fpt(top_per_patient=top_per_patient)
+        if greedy['weight'] > fpt['weight']:
+            kernel_stats = {
+                'kernel_size': fpt.get('kernel_size', len(self.candidates)),
+                'original_size': fpt.get('original_size', len(self.candidates)),
+                'kernel_reduction': fpt.get('kernel_reduction', 0),
+                'forced_in': fpt.get('forced_in', 0),
+                'removed': fpt.get('removed', 0),
+                'time_ms': fpt.get('time_ms', 0),
+                'used_greedy_fallback': True,
+            }
+            fpt = dict(greedy)
+            fpt.update(kernel_stats)
+        else:
+            fpt['used_greedy_fallback'] = False
+        elapsed = (time.perf_counter() - start) * 1000
+
+        selected_edges = []
+        for cycle in fpt['cycles']:
+            selected_edges.extend(cycle['edges'])
+
+        top_candidates = sorted(
+            (self._candidate_payload(c) for c in self.candidates.values()),
+            key=lambda c: c['weight'],
+            reverse=True,
+        )[:10]
+
+        return {
+            'algorithm': 'PS-KCP',
+            'candidate_count': len(self.candidates),
+            'cycle_conflict_edges': len(conflict_edges),
+            'greedy': greedy,
+            'fpt': fpt,
+            'weight_improvement': round(fpt['weight'] - greedy['weight'], 4),
+            'transplant_improvement': fpt['transplants'] - greedy['transplants'],
+            'stability_improvement': greedy['stability_violations'] - fpt['stability_violations'],
+            'selected_edges': selected_edges,
+            'selected_nodes': sorted({node for cycle in fpt['cycles'] for node in cycle['nodes']}),
+            'top_candidates': top_candidates,
+            'total_time_ms': round(elapsed, 4),
+        }
 
 
 class MIAMSolver:

@@ -26,6 +26,7 @@ Standard KEP solvers find cycles and chains using Integer Linear Programming but
 - **Compatibility Graph G** — directed edges where donor blood type of pair `u` is compatible with recipient blood type of pair `v`
 - **Conflict Graph C** — edges between pairs that share a hospital/crossmatch resource (cannot both be activated)
 - **MIAM** — maximum weight set of exchanges satisfying induced + conflict-free + acyclic constraints simultaneously
+- **PS-KCP** — preference-stable kernelized cycle packing over real 2-cycle and 3-cycle exchange candidates
 
 ---
 
@@ -34,6 +35,7 @@ Standard KEP solvers find cycles and chains using Integer Linear Programming but
 | Feature | Description |
 |---------|-------------|
 | 🔬 **MIAM Algorithm** | FPT algorithm with weighted kernelisation + bounded search tree |
+| **PS-KCP Hybrid** | Preference-stable cycle packing with greedy seed + kernelized FPT search |
 | 🧠 **Kernelisation** | 3 reduction rules (isolated removal, forced inclusion, dominated vertex) |
 | ⚡ **Greedy Baseline** | O(n²) greedy MIAM for comparison |
 | 📊 **Algorithm Benchmark** | Induced vs Acyclic matching time comparison across all cycles |
@@ -45,6 +47,19 @@ Standard KEP solvers find cycles and chains using Integer Linear Programming but
 ---
 
 ## 🧠 Algorithm Details
+
+### Preference-Stable Kernelized Cycle Packing (PS-KCP)
+
+PS-KCP is the newer hybrid approach in this project. It works at the exchange-cycle level rather than selecting individual patient-pair vertices:
+
+1. Generate valid 2-cycle and 3-cycle kidney exchange candidates from the compatibility graph.
+2. Score each candidate using dataset-derived preference proxies: predicted survival chance, organ health score, diagnosis urgency, donor approval, donor age/weight fit, and blood-type compatibility.
+3. Build a conflict graph between cycle candidates when they share patient pairs or simulated hospital/crossmatch resources.
+4. Apply practical kernel rules: remove duplicate/dominated cycles, cap low-ranked patient-local alternatives, and force isolated safe cycles.
+5. Compare a greedy cycle-packing seed with FPT branch-and-bound on the reduced candidate graph.
+6. Count blocking cycles as a stability proxy: an unselected cycle blocks if every involved recipient would prefer that cycle's donor over their current assignment.
+
+This does not claim to beat NP-hardness. The practical claim is that preprocessing reduces the effective candidate graph before exact search on small and medium bounded-cycle kidney exchange instances.
 
 ### Mixed Induced-Acyclic Matching (MIAM)
 
@@ -76,14 +91,14 @@ w(v) = blood_type_rarity_score(donor, recipient) + urgency_proxy(patient_id)
 
 ```
 VIPVISUALIZER/
-├── app.py                              # Flask backend (4 API endpoints)
-├── kidney_exchange.py                  # KidneyExchange + MIAMSolver classes
+├── app.py                              # Flask backend API endpoints
+├── kidney_exchange.py                  # KidneyExchange, MIAMSolver, PSKCPSolver
 ├── Kidney_Organ_SupplyChain_RawDataset.csv  # Real dataset (2000+ pairs)
 ├── templates/
 │   └── index.html                      # Frontend HTML
 ├── static/
 │   ├── style.css                       # Premium dark UI CSS
-│   └── script.js                       # Vis-network + MIAM frontend logic
+│   └── script.js                       # Vis-network + MIAM/PS-KCP frontend logic
 ├── Procfile                            # Render/gunicorn start command
 ├── render.yaml                         # Render one-click deploy blueprint
 └── requirements.txt                    # Flask, pandas, gunicorn
@@ -100,6 +115,7 @@ VIPVISUALIZER/
 | `GET /api/graph` | Return graph nodes + edges (cached) |
 | `GET /api/cycles` | Return cycles + induced/acyclic benchmark times |
 | `GET /api/miam` | Run full MIAM pipeline (conflict graph + greedy + FPT) |
+| `GET /api/pskcp` | Run PS-KCP hybrid cycle packing with preference/stability scoring |
 
 ---
 
