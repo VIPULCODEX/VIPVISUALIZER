@@ -4,6 +4,7 @@
 import pandas as pd
 import time
 import random
+import hashlib
 
 
 # ─────────────────────────────────────────────────────────────
@@ -178,6 +179,21 @@ class MIAMSolver:
         self.conflict_edges  = []   # list of (u,v) for frontend rendering
         self.n_conflict      = 0
 
+    def _stable_bucket(self, value: str, modulo: int) -> int:
+        """Return a deterministic bucket for repeatable local and Render runs."""
+        digest = hashlib.sha256(str(value).encode('utf-8')).hexdigest()
+        return int(digest[:12], 16) % modulo
+
+    def _compat_neighbours(self, v: str, active=None) -> set:
+        """Compatibility neighbours in either direction of the directed graph."""
+        neighbours = set(self.kx.adj_list.get(v, []))
+        for u, out_neighbours in self.kx.adj_list.items():
+            if v in out_neighbours:
+                neighbours.add(u)
+        if active is not None:
+            neighbours &= active
+        return neighbours
+
     # ── Step 1: Assign weights ───────────────────────────────
     def assign_weights(self):
         """
@@ -186,7 +202,7 @@ class MIAMSolver:
         """
         for pid, d in self.kx.nodes.items():
             base    = _PAIR_WEIGHT.get((d['donor'], d['recipient']), 1)
-            urgency = (abs(hash(pid)) % 3) + 1   # 1, 2, or 3
+            urgency = self._stable_bucket(pid, 3) + 1   # 1, 2, or 3
             self.weights[pid] = base + urgency
 
     # ── Step 2: Build conflict graph C ───────────────────────
@@ -206,7 +222,7 @@ class MIAMSolver:
         nodes = list(self.kx.nodes.keys())
 
         # Assign each patient pair to a hospital
-        hospital = {p: abs(hash(p)) % num_hospitals for p in nodes}
+        hospital = {p: self._stable_bucket(p, num_hospitals) for p in nodes}
 
         self.conflict_adj   = {p: set() for p in nodes}
         self.conflict_edges = []
@@ -256,7 +272,7 @@ class MIAMSolver:
             for v in list(active):
                 if v in to_remove:
                     continue
-                gN = set(self.kx.adj_list.get(v, [])) & active
+                gN = self._compat_neighbours(v, active)
                 cN = self.conflict_adj.get(v, set())  & active
 
                 # Rule 1
@@ -282,13 +298,13 @@ class MIAMSolver:
         for i, u in enumerate(lst):
             if u in dominated:
                 continue
-            gNu = set(self.kx.adj_list.get(u, [])) & active
+            gNu = self._compat_neighbours(u, active)
             cNu = self.conflict_adj.get(u, set())  & active
             for j, v in enumerate(lst):
                 if i == j or v in dominated:
                     continue
                 if self.weights.get(u, 1) <= self.weights.get(v, 1):
-                    gNv = set(self.kx.adj_list.get(v, [])) & active
+                    gNv = self._compat_neighbours(v, active)
                     cNv = self.conflict_adj.get(v, set())  & active
                     if gNu <= gNv and cNu <= cNv:
                         dominated.add(u)
@@ -304,10 +320,10 @@ class MIAMSolver:
         """
         Check if adding v to miam_set keeps the set valid:
           - No conflict edge to any member of miam_set
-          - No G-edge to any member of miam_set (induced independence)
+          - No G-edge in either direction to any member of miam_set
         """
         cN = self.conflict_adj.get(v, set())
-        gN = set(self.kx.adj_list.get(v, []))
+        gN = self._compat_neighbours(v)
         return not (cN & miam_set) and not (gN & miam_set)
 
     # ── Step 4a: Greedy MIAM ─────────────────────────────────
@@ -325,7 +341,7 @@ class MIAMSolver:
                 continue
             if self._can_add(v, set(miam)):
                 miam.append(v)
-                for nb in self.kx.adj_list.get(v, []):
+                for nb in self._compat_neighbours(v):
                     excluded.add(nb)
 
         elapsed = (time.perf_counter() - start) * 1000
@@ -373,7 +389,7 @@ class MIAMSolver:
             # Branch A — include v (valid addition check)
             if self._can_add(v, current):
                 blocked = (
-                    set(self.kx.adj_list.get(v, [])) |   # G-neighbours (induced)
+                    self._compat_neighbours(v) |          # G-neighbours (induced)
                     self.conflict_adj.get(v, set())        # C-neighbours (conflict)
                 ) & remaining
                 _search(
