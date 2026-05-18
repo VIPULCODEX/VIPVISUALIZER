@@ -1,0 +1,373 @@
+================================================================================
+  MINOR PROJECT PLAN
+  Title: A Conflict-Free Kidney Exchange Algorithm via Mixed Induced-Acyclic Matching
+  Author (Student): [Your Name]
+  Duration: 4 Months
+================================================================================
+
+
+--------------------------------------------------------------------------------
+BACKGROUND & MOTIVATION
+--------------------------------------------------------------------------------
+
+Kidney Exchange Programs (KEP) match incompatible donor-recipient pairs so that
+compatible swaps can be made. The standard approach models this as finding cycles
+(2-way, 3-way swaps) and chains (non-directed donor-initiated) in a compatibility
+graph and solves it using Integer Linear Programming (ILP).
+
+The problem with current KEP solvers:
+  - Cycles and chains are optimized independently.
+  - Real exchanges can CONFLICT: two exchange sets may be medically linked through
+    shared crossmatch tests, tissue type overlaps, or hospital logistics. Activating
+    both causes cascade failures.
+  - Current ILP models completely ignore these conflict relationships.
+
+This project introduces a new model and a new algorithm that addresses this gap.
+
+
+--------------------------------------------------------------------------------
+PAPER BACKGROUND (Papers Already Read)
+--------------------------------------------------------------------------------
+
+1. "The Parameterized Complexity of the Induced Matching Problem"
+   - Authors: Hannes Moser and Somnath Sikdar
+   - Key Results:
+       * Induced matching is NP-complete and W[1]-hard on general graphs.
+       * Linear kernel on planar graphs (via 3 reduction rules + maximal region decomposition).
+       * Linear kernel on bounded-degree graphs.
+       * Cubic kernel (O(k^3)) on graphs with girth >= 6.
+       * FPT on line graphs.
+       * Linear-time DP on bounded treewidth graphs (4^treewidth factor).
+       * W[1]-hard on bipartite graphs (via reduction from Irredundant Set).
+
+2. Additional papers on acyclic matching and kidney exchange (read by student).
+
+
+--------------------------------------------------------------------------------
+THE NEW PROBLEM: Mixed Induced-Acyclic Matching (MIAM)
+--------------------------------------------------------------------------------
+
+DEFINITIONS:
+
+  Compatibility Graph G = (V, E):
+    - Each vertex v in V = a donor-recipient pair
+    - Edge (u, v) in E = donor of u is compatible with recipient of v, or vice versa
+
+  Conflict Graph C = (V, F):
+    - Same vertex set V
+    - Edge (u, v) in F = pairs u and v cannot both be activated (conflict exists due to
+      shared crossmatch, hospital constraint, tissue type overlap, etc.)
+
+  Induced Matching (for cycle exchanges):
+    - A matching M in G such that no two edges of M are connected by any other edge.
+    - Ensures activated cycle-exchanges are fully independent of each other.
+
+  Acyclic Matching (for chain exchanges):
+    - A matching M in G such that the subgraph induced by M contains no alternating cycles.
+    - Models chain-based exchanges initiated by non-directed (altruistic) donors.
+
+  Mixed Induced-Acyclic Matching (MIAM):
+    - A set S of exchanges (edges/cycles/chains) in G such that:
+        (1) S forms a valid matching (no vertex used twice).
+        (2) No two elements of S are connected by a conflict edge in F (induced constraint).
+        (3) The chain-portion of S forms an acyclic matching (no alternating cycles).
+    - Goal: Find maximum weight MIAM of size >= k.
+
+WHY THIS IS NEW:
+  - No existing paper unifies induced matching + acyclic matching in a single framework.
+  - No existing work applies FPT techniques to weighted KEP under conflict constraints.
+  - No paper exploits blood-type/HLA biological structure for graph algorithm design.
+
+
+--------------------------------------------------------------------------------
+RESEARCH CONTRIBUTIONS (What We Will Prove and Build)
+--------------------------------------------------------------------------------
+
+CONTRIBUTION 1 — Structural Observation on Kidney Exchange Graphs
+  - Prove that real kidney exchange compatibility graphs are structurally restricted:
+      * Blood type compatibility (O, A, B, AB) limits expected degree to <= 6.
+      * HLA crossmatch further restricts the graph to near-planar or bounded-degree.
+  - Formally characterize the graph class that kidney exchange graphs belong to.
+  - This justifies applying the linear kernel from Moser-Sikdar to real KEP instances.
+
+CONTRIBUTION 2 — Weighted Kernelization (New Reduction Rules)
+  - Existing kernels only work for UNWEIGHTED induced matching.
+  - We extend to WEIGHTED case (patient urgency, waiting time, pediatric priority).
+  - Design 4-5 new reduction rules that preserve weights:
+      Rule 1: Remove isolated vertices (degree 0 in both G and C).
+      Rule 2: Remove dominated pairs (a vertex strictly worse in weight and compatibility).
+      Rule 3: Forced inclusion (a vertex with no conflict neighbors and high weight).
+      Rule 4: Conflict chain simplification (simplify long conflict chains).
+      Rule 5: [To be derived based on kidney graph structure].
+  - Prove: After applying rules, kernel size is O(k) for bounded-degree kidney graphs.
+
+CONTRIBUTION 3 — W[1]-Hardness on General Graphs
+  - Prove MIAM is W[1]-hard on general bipartite graphs.
+  - Reduction from W[1]-complete Induced Matching on bipartite graphs
+    (already proven hard by Moser-Sikdar via Irredundant Set reduction).
+  - This shows that restricting to kidney graph structure is NECESSARY for tractability.
+
+CONTRIBUTION 4 — FPT Algorithm for MIAM on Kidney Graphs
+  - Combine kernelization + bounded search tree + dynamic programming.
+  - Algorithm sketch:
+      Step 1: Apply weighted reduction rules to get kernel of size O(k).
+      Step 2: Run bounded search tree on the kernel.
+      Step 3: For each branch, apply treewidth-based DP (O(4^tw * n)).
+  - Target complexity: O(f(k) * n) where f(k) is a computable function of k.
+  - Prove correctness and complexity bound formally.
+
+CONTRIBUTION 5 — Implementation and Benchmarking
+  - Implement the full algorithm pipeline.
+  - Build synthetic kidney exchange graph generator (using real blood type distributions).
+  - Benchmark against:
+      * Gurobi/GLPK ILP (standard KEP baseline)
+      * Greedy matching
+      * Brute force (small instances for correctness check)
+  - Datasets:
+      * Synthetic graphs (100 to 10,000 vertices)
+      * Real datasets: UNOS kidney exchange data, UK NHS KEP public data (if accessible)
+  - Metrics: Solution quality (total weight), runtime, scalability with k, kernel reduction ratio.
+
+
+--------------------------------------------------------------------------------
+4-MONTH TIMELINE
+--------------------------------------------------------------------------------
+
+MONTH 1 — Theory and Formalization
+  Week 1: Finalize problem definition (MIAM). Identify all assumptions clearly.
+  Week 2: Prove structural properties of kidney exchange graphs (degree bound, planarity).
+  Week 3: Prove W[1]-hardness of MIAM on general bipartite graphs.
+  Week 4: Design weighted reduction rules. Begin correctness proofs.
+
+MONTH 2 — Algorithm Design
+  Week 1: Complete proofs of reduction rules. Prove weighted kernel size O(k).
+  Week 2: Design FPT algorithm combining kernelization + search tree + DP.
+  Week 3: Prove correctness and derive complexity bounds.
+  Week 4: Write up all theoretical results in LaTeX. Internal review.
+
+MONTH 3 — Implementation
+  Week 1: Implement kidney exchange graph generator (blood type + HLA simulation).
+  Week 2: Implement all reduction rules and the kernelization procedure.
+  Week 3: Implement the FPT algorithm (search tree + treewidth DP).
+  Week 4: Implement ILP baseline using PuLP or OR-Tools. Unit test everything.
+
+MONTH 4 — Experiments, Analysis, and Writing
+  Week 1: Run benchmarks on synthetic graphs at various scales.
+  Week 2: Test on real datasets. Analyze solution quality vs runtime tradeoffs.
+  Week 3: Create all plots and result tables. Statistical analysis.
+  Week 4: Final report writing, presentation preparation, code cleanup.
+
+
+--------------------------------------------------------------------------------
+TECHNOLOGY STACK
+--------------------------------------------------------------------------------
+
+  Language        : Python (primary), C++ (optional for performance-critical parts)
+  Graph Library   : NetworkX (graph operations), igraph (if performance needed)
+  ILP Baseline    : PuLP with GLPK or OR-Tools (free solvers)
+  Visualization   : Matplotlib, Plotly (already have visualizer built)
+  Data Generation : Custom synthetic generator (blood type distribution: O=44%, A=42%, B=10%, AB=4%)
+  Report Writing  : LaTeX
+
+
+--------------------------------------------------------------------------------
+OPEN QUESTIONS (To Resolve in Month 1)
+--------------------------------------------------------------------------------
+
+  1. How exactly is "conflict" defined in the medical context?
+     Options:
+       a. Shared crossmatch test (lab resource conflict)
+       b. Same transplant center (surgical team conflict)
+       c. HLA tissue type too similar (graft-vs-host risk)
+     --> Need to pick the most biologically meaningful definition.
+
+  2. Is the conflict graph sparse in practice?
+     --> If yes, bounded-degree or planar conflict graph gives stronger results.
+
+  3. Access to real KEP datasets?
+     --> UNOS data requires application. UK NHS may have public summaries.
+     --> Can use SAIDMAN synthetic generator (standard in KEP literature) as fallback.
+
+  4. What weight function to use?
+     Options:
+       a. LYFT score (years of life gained from transplant)
+       b. Waiting time
+       c. PRA score (Panel Reactive Antibody — measures sensitization level)
+     --> Multiple weights possible. Start with single weight for simplicity.
+
+  5. Target venue?
+     --> If aiming for publication: IPEC (Parameterized Complexity), ALENEX (Algorithms Engineering)
+     --> If course project: internal report + demo
+
+
+--------------------------------------------------------------------------------
+RELATED WORK TO READ NEXT
+--------------------------------------------------------------------------------
+
+  1. Abraham, Blum, Sandholm (2007) — "Clearing Algorithms for Barter Exchange Markets"
+     (Foundational KEP paper, ILP approach)
+
+  2. Manlove, O'Malley (2012) — "Paired and Altruistic Kidney Donation in the UK"
+     (Chain-based exchange, real-world context)
+
+  3. Saidman et al. (2006) — "Increasing the Opportunity of Live Kidney Donation"
+     (Standard synthetic graph generator for KEP)
+
+  4. Fellows et al. (2009) — "On the Parameterized Complexity of Multiple-Interval Graph Problems"
+     (FPT techniques applicable to matching problems)
+
+  5. Cameron (2004) — "Acyclic Matchings" or related graph theory papers on acyclic matching
+     (Formalize the acyclic matching component)
+
+  6. Cygan et al. — "Parameterized Algorithms" (textbook, Chapter on W-hierarchy and kernelization)
+
+
+--------------------------------------------------------------------------------
+ALREADY DONE
+--------------------------------------------------------------------------------
+
+  [x] Read Moser-Sikdar paper on parameterized complexity of induced matching
+  [x] Read 2-3 additional papers on induced/acyclic matching and KEP
+  [x] Built compatibility graph visualizer
+  [x] Fixed critical bug: is_acyclic_matching() indentation error causing wrong cycle detection
+  [x] Replaced recursive DFS with iterative DFS to avoid Python recursion limit errors
+  [x] Premium UI overhaul: animated particle background, glassmorphism sidebar, JetBrains Mono stats
+  [x] Added animated benchmark progress bars (relative widths animate on load)
+  [x] Added cycle highlight toggle (click again to deselect), HUD status bar, golden cycle edges
+  [x] Added project_plan.txt and __pycache__/ to .gitignore (stays local only)
+  [x] Pushed all above changes to GitHub (main branch)
+
+  [x] MIAM ALGORITHM IMPLEMENTED (MIAMSolver class in kidney_exchange.py):
+        - Conflict graph C built from hospital/crossmatch resource simulation
+        - Weight assignment: blood-type rarity score + urgency proxy
+        - Kernelisation: Rule 1 (isolated vertex removal), Rule 2 (forced inclusion),
+          Rule 3 (dominated vertex removal) — kernel size O(k)
+        - Greedy MIAM baseline: O(n^2), sorts by weight, respects induced + conflict constraints
+        - FPT Algorithm: kernelise → bounded search tree O(2^k . n)
+          branches on include/exclude per vertex, finds max-weight valid MIAM
+        - Flask endpoint /api/miam runs full pipeline, returns both algorithm results
+        - Frontend: MIAM panel shows kernel reduction %, Greedy vs FPT comparison table,
+          MIAM solution nodes highlighted gold in graph, conflict edges toggle (dashed red)
+
+  [x] RENDER DEPLOYMENT CONFIGURED:
+        - Added gunicorn to requirements.txt (production WSGI server)
+        - Added Procfile: web: gunicorn app:app
+        - Added render.yaml blueprint (one-click deploy from GitHub)
+        - Auto-deploys on every git push to main branch
+        - Persistent containers: _cache works correctly (unlike Vercel serverless)
+        - Free tier: permanent link, never dies (sleeps after 15min inactivity)
+
+  [x] CLEANUP + MIAM CORRECTNESS PASS (2026-04-30):
+        - Removed stale Vercel deployment file because project now targets Render
+        - Removed unused Excel sample generator with schema not used by Flask CSV loader
+        - Removed tracked __pycache__ bytecode and kept cache files ignored
+        - Made MIAM hospital assignment and urgency scores deterministic across runs
+        - Fixed MIAM validity checks to reject compatibility conflicts in either direction
+        - Kept project_plan.txt local-only and excluded from GitHub push
+
+  [x] NEW RESEARCH DIRECTION ANALYSIS (2026-04-30):
+        - Compared original constrained matching presentation, Moser-Sikdar induced
+          matching paper, current MIAM implementation, and latest KE-Opt stability abstract
+        - Identified weakness in current MIAM: it selects patient-pair vertices, while
+          kidney exchange should select disjoint exchange cycles/chains
+        - Proposed stronger hybrid direction: Preference-Stable Kernelized Cycle Packing
+          (PS-KCP), combining 2/3-cycle generation, preference/stability pruning,
+          conflict-aware candidate graph construction, greedy seed, kernelization,
+          FPT branching, and local repair
+        - Dataset fields can simulate stability preferences using predicted survival,
+          organ health score, diagnosis severity, donor approval, donor age/weight,
+          and scanned timestamp
+
+  [x] PS-KCP IMPLEMENTATION PASS (2026-05-01):
+        - Extended CSV loader to keep dataset fields needed for preference scoring
+        - Added PSKCPSolver with 2/3-cycle candidate generation, preference scoring,
+          candidate conflict graph, practical kernelization, greedy baseline, bounded
+          branch-and-bound, and blocking-cycle stability proxy
+        - Added /api/pskcp endpoint with Render-safe candidate caps
+        - Added PS-KCP frontend panel with candidate/kernel/stability metrics,
+          greedy vs hybrid comparison, selected cycle list, and graph highlighting
+        - Added README documentation for the hybrid algorithm and endpoint
+        - Hybrid output keeps the greedy seed if bounded kernel search cannot improve it
+
+
+--------------------------------------------------------------------------------
+TO DO
+--------------------------------------------------------------------------------
+
+  [x] Formally define MIAM problem
+  [ ] Identify and read related work listed above
+  [ ] Prove structural properties of kidney graphs (theoretical)
+  [ ] Prove W[1]-hardness of MIAM (theoretical)
+  [x] Design weighted reduction rules (3 rules implemented + proved)
+  [x] Design FPT algorithm (bounded search tree on kernel)
+  [x] Implement algorithm (MIAMSolver class, greedy + FPT)
+  [ ] Build synthetic data generator (separate from CSV loader)
+  [ ] Run benchmarks at scale (100-10000 nodes)
+  [ ] Write final report
+
+
+--------------------------------------------------------------------------------
+NEXT WORK SESSION: EXAMPLE-BASED ANALYSIS
+--------------------------------------------------------------------------------
+
+  Goal:
+    - Use one small dataset instance to explain exactly how MIAM and PS-KCP work.
+
+  Recommended steps:
+    1. Run local Flask app with python app.py.
+    2. Load 10, 15, or 25 patient nodes.
+    3. Run MIAM and explain it as the older patient-pair constrained matching
+       prototype.
+    4. Run PS-KCP and explain it as the new exchange-cycle-level hybrid algorithm.
+    5. Pick one selected PS-KCP cycle and manually trace:
+         - donor-recipient direction on every edge,
+         - blood-type compatibility,
+         - preference score,
+         - cycle weight,
+         - conflict avoidance,
+         - blocking-cycle/stability meaning.
+    6. Compare Greedy vs PS-KCP using:
+         - number of selected cycles,
+         - total transplants,
+         - total weight,
+         - runtime,
+         - stability violations,
+         - kernel reduction.
+    7. If needed, add a debug/detail endpoint that returns a full scoring
+       breakdown for one cycle candidate.
+
+
+--------------------------------------------------------------------------------
+ONGOING CHANGE MANAGEMENT PLAN (ADDED 2026-05-18)
+--------------------------------------------------------------------------------
+
+User instruction for all future work:
+  - Keep project_plan.txt append-only for new planning details.
+  - Keep project_log.txt append-only for implementation/change history.
+  - Do not remove old details from either file.
+  - Whenever a new feature, bug fix, experiment, or documentation change is made,
+    add a dated note here describing the planned/implemented work.
+  - After each completed change, commit and push to GitHub main.
+
+Immediate plan update:
+  [x] Analyze current repository structure and active implementation.
+  [x] Update .gitignore so project_plan.txt and project_log.txt can be committed.
+  [x] Append the new tracking and GitHub push policy to project_log.txt.
+  [x] Append this ongoing change-management plan without deleting old plan details.
+  [x] Run a quick smoke test after the documentation/policy update.
+  [x] Commit and push the update to GitHub.
+
+Current implementation baseline:
+  - Backend: Flask app with /api/load, /api/graph, /api/cycles, /api/miam, and
+    /api/pskcp.
+  - Algorithms: older MIAM patient-pair prototype plus newer PS-KCP cycle-level
+    hybrid solver.
+  - Frontend: interactive dashboard with graph visualization, MIAM comparison,
+    PS-KCP comparison, selected cycle lists, and highlighting.
+  - Deployment: Render configuration is present and GitHub push to main can trigger
+    deployment.
+
+
+================================================================================
+END OF PROJECT PLAN
+================================================================================
