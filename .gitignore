@@ -1,5 +1,9 @@
 .vercel
 project_plan.txt
 project_log.txt
+REPORT.txt
+*.txt
+!requirements.txt
+!runtime.txt
 __pycache__/
 *.pyc
