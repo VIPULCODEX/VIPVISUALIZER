@@ -368,6 +368,34 @@ Current implementation baseline:
     deployment.
 
 
+--------------------------------------------------------------------------------
+REPORT WRITING PLAN: CHAPTER 1 STRUCTURE (ADDED 2026-05-18)
+--------------------------------------------------------------------------------
+
+Planned Chapter 1 structure:
+  1.1 Background and Motivation
+  1.2 Kidney Exchange Problem
+  1.3 Graph-Based Modeling of Kidney Exchange
+  1.4 Compatibility Graph and Exchange Cycles
+  1.5 Challenges in Kidney Exchange Optimization
+  1.6 Limitations of Basic Matching Approaches
+  1.7 Motivation for Constraint-Aware Cycle Optimization
+  1.8 Objectives of the Work
+  1.9 Scope of the Work
+  1.10 Organization of the Report
+
+Writing purpose:
+  - Start with real medical motivation and shortage of compatible donors.
+  - Explain how donor-recipient pairs become graph vertices and compatibility links
+    become directed edges.
+  - Introduce 2-cycle and 3-cycle exchanges because PS-KCP selects actual cycles.
+  - Explain why simple matching is insufficient for this project: real solutions
+    must avoid patient overlap, hospital/crossmatch conflicts, poor preference
+    outcomes, and excessive runtime.
+  - Bridge to the project's final hybrid approach: Preference-Stable Kernelized
+    Cycle Packing.
+
+
 ================================================================================
 END OF PROJECT PLAN
 ================================================================================

@@ -423,6 +423,44 @@ Important note:
     project work.
 
 
+--------------------------------------------------------------------------------
+REPORT STRUCTURE DECISION: 2026-05-18
+--------------------------------------------------------------------------------
+
+User requested validation of Chapter 1 report structure.
+
+Decision:
+  - The proposed structure is mostly correct, but it should explicitly connect the
+    report introduction to this project's real progression:
+      * kidney exchange background,
+      * compatibility graph modeling,
+      * optimization challenges,
+      * limitations of simple matching / older MIAM abstraction,
+      * motivation for constraint-aware cycle optimization,
+      * final PS-KCP hybrid direction.
+
+Recommended Chapter 1 structure:
+  1.1 Background and Motivation
+  1.2 Kidney Exchange Problem
+  1.3 Graph-Based Modeling of Kidney Exchange
+  1.4 Compatibility Graph and Exchange Cycles
+  1.5 Challenges in Kidney Exchange Optimization
+  1.6 Limitations of Basic Matching Approaches
+  1.7 Motivation for Constraint-Aware Cycle Optimization
+  1.8 Objectives of the Work
+  1.9 Scope of the Work
+  1.10 Organization of the Report
+
+Reason:
+  - Separating compatibility graph modeling from exchange cycles makes the project
+    easier to explain.
+  - Adding limitations of basic matching creates a clean bridge from standard
+    matching concepts to MIAM and then to PS-KCP.
+  - The structure supports the project's final claim: PS-KCP is a practical hybrid
+    cycle-level method combining preference scoring, conflict awareness,
+    kernelization, greedy baseline, and bounded FPT search.
+
+
 ================================================================================
 END OF PROJECT LOG
 ================================================================================
