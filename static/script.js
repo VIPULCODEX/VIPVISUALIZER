@@ -604,16 +604,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                 Show conflict edges`;
         } else {
-            // Add conflict edges as dashed red
+            // Add conflict edges with a high-contrast dashed style for the dark graph.
             const toAdd = conflictEdgesData.map((e, i) => ({
                 id:     `conflict_${i}`,
                 from:   e.from,
                 to:     e.to,
-                color:  { color: 'rgba(247,129,102,0.5)', highlight: '#f78166' },
-                width:  1,
-                dashes: [4, 4],
+                color:  {
+                    color:     '#ff2d75',
+                    highlight: '#ffb3cb',
+                    hover:     '#ff6b9f'
+                },
+                width:  4,
+                dashes: [12, 8],
                 arrows: { to: { enabled: false } },
-                shadow: { enabled: false },
+                shadow: { enabled: true, color: 'rgba(255,45,117,0.75)', size: 18, x: 0, y: 0 },
+                smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
                 title:  'Conflict edge (resource constraint)'
             }));
             edgesDataset.add(toAdd);
