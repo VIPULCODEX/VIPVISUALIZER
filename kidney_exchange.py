@@ -128,15 +128,19 @@ class KidneyExchange:
                     self.adj_list[u].append(v)
 
     # ── Cycle detection ──────────────────────────────────────
-    def find_cycles(self, max_length=3):
+    def find_cycles(self, max_length=3, max_cycles=100000):
         cycles = []
 
         def dfs(start, cur, path):
+            if len(cycles) >= max_cycles:
+                return
             if len(path) > max_length:
                 return
             for nb in self.adj_list.get(cur, []):
                 if nb == start and 2 <= len(path) <= max_length:
                     cycles.append(path[:])
+                    if len(cycles) >= max_cycles:
+                        return
                 elif nb not in path:
                     dfs(start, nb, path + [nb])
 
