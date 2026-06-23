@@ -72,6 +72,51 @@ class KidneyExchange:
         except (TypeError, ValueError):
             return default
 
+    def load_from_preflib(self, base_path: str) -> bool:
+        """Load graph from a PrefLib .wmd and .dat pair."""
+        import os
+        dat_path = base_path + ".dat"
+        wmd_path = base_path + ".wmd"
+        
+        if not os.path.exists(dat_path) or not os.path.exists(wmd_path):
+            print(f"Error: Could not find {dat_path} or {wmd_path}")
+            return False
+            
+        self.nodes = {}
+        self.adj_list = {}
+        
+        # Parse nodes from .dat
+        with open(dat_path, 'r') as f:
+            lines = f.read().splitlines()
+            for line in lines[1:]: # Skip header
+                if not line.strip(): continue
+                parts = line.split(',')
+                node_id = str(parts[0]).strip()
+                patient_bg = parts[1].strip()
+                donor_bg = parts[2].strip()
+                self.nodes[node_id] = {
+                    'donor': donor_bg,
+                    'recipient': patient_bg,
+                    'pra': self._safe_float(parts[4]),
+                    'is_altruist': int(parts[6].strip()) == 1
+                }
+                self.adj_list[node_id] = []
+                
+        # Parse edges from .wmd
+        with open(wmd_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'): continue
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    u = str(parts[0]).strip()
+                    v = str(parts[1]).strip()
+                    if u in self.adj_list and v in self.nodes:
+                        self.adj_list[u].append(v)
+                        
+        print(f"Loaded {len(self.nodes)} pairs from PrefLib instance {base_path}")
+        return True
+
     def can_donate(self, donor, recipient):
         return recipient in _DONATE_RULES.get(donor, [])
 

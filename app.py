@@ -21,17 +21,36 @@ def index():
 
 
 # ── Load dataset & build graph ───────────────────────────────
+@app.route('/api/datasets')
+def list_datasets():
+    ds_dir = os.path.join(os.path.dirname(__file__), 'dataset')
+    if not os.path.exists(ds_dir):
+        return jsonify({'datasets': []})
+    files = os.listdir(ds_dir)
+    # Get all unique prefixes from .wmd files
+    prefixes = sorted(list(set([f.split('.')[0] for f in files if f.endswith('.wmd')])))
+    return jsonify({'datasets': prefixes})
+
+
 @app.route('/api/load')
 def load_data():
-    num_nodes = request.args.get('nodes', default=50, type=int)
-    csv_path  = os.path.join(os.path.dirname(__file__),
-                             'Kidney_Organ_SupplyChain_RawDataset.csv')
-
+    dataset_id = request.args.get('dataset_id', default='csv', type=str)
+    
     kx = KidneyExchange()
-    if not kx.load_from_csv(csv_path, max_rows=num_nodes):
-        return jsonify({'error': 'Failed to load CSV'})
+    if dataset_id == 'csv':
+        num_nodes = request.args.get('nodes', default=50, type=int)
+        csv_path  = os.path.join(os.path.dirname(__file__),
+                                 'Kidney_Organ_SupplyChain_RawDataset.csv')
+        if not kx.load_from_csv(csv_path, max_rows=num_nodes):
+            return jsonify({'error': 'Failed to load CSV'})
+        kx.build_graph()
+    else:
+        ds_dir = os.path.join(os.path.dirname(__file__), 'dataset')
+        base_path = os.path.join(ds_dir, dataset_id)
+        if not kx.load_from_preflib(base_path):
+            return jsonify({'error': f'Failed to load PrefLib instance {dataset_id}'})
+        # Note: load_from_preflib already builds the adjacency list based on .wmd file
 
-    kx.build_graph()
     _cache['kx'] = kx   # keep reference for MIAM
 
     # Graph payload

@@ -74,6 +74,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnText        = document.getElementById('btnText');
     const btnLoader      = document.getElementById('btnLoader');
     const btnIcon        = document.querySelector('.btn-icon');
+    
+    const datasetSelect  = document.getElementById('datasetSelect');
+    const nodeInputRow   = document.getElementById('nodeInputRow');
+
+    // Fetch available datasets
+    fetch('/api/datasets')
+        .then(res => res.json())
+        .then(data => {
+            if (data.datasets && data.datasets.length > 0) {
+                const group = document.createElement('optgroup');
+                group.label = 'PrefLib Instances (EJOR 2026)';
+                data.datasets.forEach(ds => {
+                    const opt = document.createElement('option');
+                    opt.value = ds;
+                    opt.textContent = ds;
+                    group.appendChild(opt);
+                });
+                datasetSelect.appendChild(group);
+            }
+        });
+
+    datasetSelect.addEventListener('change', () => {
+        if (datasetSelect.value === 'csv') {
+            nodeInputRow.style.display = 'block';
+        } else {
+            nodeInputRow.style.display = 'none';
+        }
+    });
 
     const elNodeCount    = document.getElementById('nodeCount');
     const elEdgeCount    = document.getElementById('edgeCount');
@@ -161,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Load Button ────────────────────────────────────────────
     btnLoad.addEventListener('click', async () => {
         const numNodes = parseInt(document.getElementById('nodeInput').value) || 50;
+        const dsId = datasetSelect.value;
 
         // Loading state
         btnLoad.disabled = true;
@@ -171,7 +200,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hudStatus.textContent = 'Loading dataset…';
 
         try {
-            const resLoad = await fetch(`/api/load?nodes=${numNodes}`);
+            const loadUrl = `/api/load?nodes=${numNodes}&dataset_id=${encodeURIComponent(dsId)}`;
+            const resLoad = await fetch(loadUrl);
             const dataLoad = await resLoad.json();
 
             if (dataLoad.success) {

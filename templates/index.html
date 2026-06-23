@@ -53,6 +53,14 @@
             <div class="section">
                 <div class="section-label">Configuration</div>
                 <div class="input-row">
+                    <label for="datasetSelect">Dataset</label>
+                    <div class="input-wrapper">
+                        <select id="datasetSelect" style="width:100%; padding: 6px; background: var(--panel-bg); color: var(--text-1); border: 1px solid var(--panel-border); border-radius: var(--radius-sm); font-family: 'Inter', sans-serif; font-size: 12px; outline: none; margin-bottom: 8px;">
+                            <option value="csv">CSV (Synthetic Supply Chain)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="input-row" id="nodeInputRow">
                     <label for="nodeInput">Patient nodes</label>
                     <div class="input-wrapper">
                         <input type="number" id="nodeInput" value="50" min="5" max="500">
