@@ -401,446 +401,114 @@ document.addEventListener('DOMContentLoaded', () => {
     let showingConflicts   = false;
     let miamSolutionNodes  = [];   // nodes in FPT MIAM solution
 
-    // Enable the MIAM button once the graph is loaded
-    function enableMiam() {
-        runMiamBtn.disabled    = false;
-        miamBtnText.textContent = 'Run MIAM Algorithm';
-        runPskcpBtn.disabled    = false;
-        pskcpBtnText.textContent = 'Run PS-KCP Hybrid';
-        runCompareBtn.disabled    = false;
-        compareBtnText.textContent = 'Run All Comparisons';
+    // Enable the Run buttons once the graph is loaded
+    function enableRunButtons() {
+        document.getElementById('runGreedyBtn').disabled = false;
+        document.getElementById('runPskcpBtn').disabled = false;
+        document.getElementById('runIlpCfBtn').disabled = false;
+        document.getElementById('runIlpEfBtn').disabled = false;
     }
 
-    // Call enableMiam after successful graph load
+    // Call enableRunButtons after successful graph load
     const _origLoad = btnLoad.onclick;
     btnLoad.addEventListener('click', () => {
         // Will be enabled after fetchCycles resolves (hooked below)
     });
 
-    // ── Run MIAM ──────────────────────────────────────────────
-    runMiamBtn.addEventListener('click', async () => {
-        runMiamBtn.disabled     = true;
-        miamBtnText.textContent = 'Computing…';
-        miamLoader.classList.remove('hidden');
-        hudStatus.textContent   = 'Running MIAM algorithm…';
+    // Right Sidebar Logic
+    const rightSidebar = document.getElementById('rightSidebar');
+    const toggleRightSidebar = document.getElementById('toggleRightSidebar');
+    const closeRightSidebar = document.getElementById('closeRightSidebar');
+    const compareCardsContainer = document.getElementById('compareCardsContainer');
+    const emptyCompare = document.getElementById('emptyCompare');
+    const compareCountBadge = document.getElementById('compareCount');
+    let compareCount = 0;
+
+    toggleRightSidebar.addEventListener('click', () => {
+        rightSidebar.classList.toggle('open');
+    });
+
+    closeRightSidebar.addEventListener('click', () => {
+        rightSidebar.classList.remove('open');
+    });
+
+    function addCompareCard(data) {
+        if (emptyCompare) {
+            emptyCompare.style.display = 'none';
+        }
+        compareCount++;
+        compareCountBadge.textContent = compareCount;
+        if (!rightSidebar.classList.contains('open')) {
+            rightSidebar.classList.add('open');
+        }
+
+        const card = document.createElement('div');
+        card.className = 'compare-card';
+        card.innerHTML = `
+            <div class="cc-title">
+                ${data.name}
+                <span style="color:var(--text-2); font-size:12px;">${data.time_ms} ms</span>
+            </div>
+            <div class="cc-desc">${data.description}</div>
+            <div class="cc-stat">
+                <span class="label">Transplants</span>
+                <span class="value best">${data.transplants}</span>
+            </div>
+            <div class="cc-stat">
+                <span class="label">Total Weight</span>
+                <span class="value">${data.weight.toFixed(1)}</span>
+            </div>
+        `;
+        compareCardsContainer.appendChild(card);
+        // scroll to bottom
+        compareCardsContainer.scrollTop = compareCardsContainer.scrollHeight;
+    }
+
+    async function runAlgorithm(endpoint, btnId, textId, defaultText, runningText) {
+        const btn = document.getElementById(btnId);
+        const textSpan = document.getElementById(textId);
+        
+        btn.disabled = true;
+        textSpan.textContent = runningText;
+        hudStatus.textContent = runningText;
 
         try {
-            const res  = await fetch('/api/miam');
+            const res = await fetch(endpoint);
             const data = await res.json();
-
+            
             if (data.error) {
                 alert(data.error);
                 return;
             }
-
-            renderMiamResults(data);
-            hudStatus.textContent = `MIAM complete — FPT solution: ${data.fpt.size} pairs, weight ${data.fpt.weight}`;
-
+            
+            addCompareCard(data);
+            hudStatus.textContent = `${data.abbrev} complete: ${data.transplants} transplants.`;
         } catch (e) {
             console.error(e);
-            hudStatus.textContent = 'MIAM error';
+            hudStatus.textContent = `Error running algorithm`;
         } finally {
-            runMiamBtn.disabled     = false;
-            miamBtnText.textContent = 'Re-run MIAM';
-            miamLoader.classList.add('hidden');
+            btn.disabled = false;
+            textSpan.textContent = defaultText;
         }
-    });
-
-    // Run PS-KCP hybrid cycle-packing algorithm
-    runPskcpBtn.addEventListener('click', async () => {
-        runPskcpBtn.disabled     = true;
-        pskcpBtnText.textContent = 'Packing cycles...';
-        pskcpLoader.classList.remove('hidden');
-        hudStatus.textContent    = 'Running PS-KCP hybrid solver...';
-
-        try {
-            const res  = await fetch('/api/pskcp');
-            const data = await res.json();
-
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-
-            renderPskcpResults(data);
-            hudStatus.textContent =
-                `PS-KCP complete - ${data.fpt.transplants} transplants, ${data.fpt.stability_violations} blocking cycles`;
-
-        } catch (e) {
-            console.error(e);
-            hudStatus.textContent = 'PS-KCP error';
-        } finally {
-            runPskcpBtn.disabled     = false;
-            pskcpBtnText.textContent = 'Re-run PS-KCP';
-            pskcpLoader.classList.add('hidden');
-        }
-    });
-
-    // ── Render MIAM results ───────────────────────────────────
-    function renderMiamResults(data) {
-        const { greedy, fpt, n_conflict_edges, conflict_edges } = data;
-
-        // Save conflict edges for toggle
-        conflictEdgesData = conflict_edges || [];
-
-        // Stats panel
-        document.getElementById('miamConflicts').textContent = n_conflict_edges;
-        document.getElementById('miamKernel').textContent    = fpt.kernel_size + ' nodes';
-        document.getElementById('miamReduction').textContent = fpt.kernel_reduction + '%';
-        miamStats.classList.remove('hidden');
-
-        // Comparison table
-        document.getElementById('cmpGreedySize').textContent = greedy.size;
-        document.getElementById('cmpFptSize').textContent    = fpt.size;
-        document.getElementById('cmpGreedyW').textContent    = greedy.weight;
-        document.getElementById('cmpFptW').textContent       = fpt.weight;
-        document.getElementById('cmpGreedyT').textContent    = greedy.time_ms + ' ms';
-        document.getElementById('cmpFptT').textContent       = fpt.time_ms + ' ms';
-        miamCompare.classList.remove('hidden');
-
-        // Verdict
-        miamVerdict.classList.remove('hidden');
-        const weightDiff = data.weight_improvement;
-        const sizeDiff   = data.size_improvement;
-        if (weightDiff > 0) {
-            miamVerdict.innerHTML =
-                `🏆 <strong style="color:var(--purple)">FPT MIAM</strong> found a better solution: ` +
-                `+${weightDiff} weight, +${sizeDiff} pairs vs greedy. ` +
-                `Kernel reduced graph by <strong>${fpt.kernel_reduction}%</strong>.`;
-        } else {
-            miamVerdict.innerHTML =
-                `Greedy matched FPT quality on this instance (common for small graphs). ` +
-                `Kernel: <strong style="color:var(--gold)">${fpt.kernel_size}</strong> / ${fpt.original_size} nodes.`;
-        }
-
-        // Highlight MIAM solution nodes in the graph (orange glow)
-        miamSolutionNodes = fpt.solution || [];
-        highlightMiamNodes(miamSolutionNodes);
-
-        // Show conflict toggle
-        toggleConflicts.classList.remove('hidden');
     }
 
-    // ── Highlight MIAM solution nodes ─────────────────────────
-    function highlightMiamNodes(nodeIds) {
-        const updates = [];
-        nodesDataset.forEach(n => {
-            if (nodeIds.includes(n.id)) {
-                updates.push({
-                    id: n.id,
-                    borderWidth: 3,
-                    color: {
-                        background: n.color?.background || '#4a5060',
-                        border: '#f0c060',
-                        highlight: { background: '#f0c060', border: '#fff' }
-                    },
-                    shadow: { enabled: true, color: '#f0c060', size: 18 }
-                });
-            } else {
-                updates.push({ id: n.id, borderWidth: 1.5,
-                    shadow: { enabled: true, size: 6, color: n.color?.background || '#4a5060' }
-                });
-            }
-        });
-        nodesDataset.update(updates);
-    }
-
-    function renderPskcpResults(data) {
-        const { greedy, fpt } = data;
-
-        document.getElementById('pskcpCandidates').textContent = data.candidate_count;
-        document.getElementById('pskcpKernel').textContent = `${fpt.kernel_size} cycles`;
-        document.getElementById('pskcpViolations').textContent = fpt.stability_violations;
-        pskcpStats.classList.remove('hidden');
-
-        document.getElementById('psGreedyT').textContent = greedy.transplants;
-        document.getElementById('psFptT').textContent = fpt.transplants;
-        document.getElementById('psGreedyW').textContent = greedy.weight.toFixed(1);
-        document.getElementById('psFptW').textContent = fpt.weight.toFixed(1);
-        document.getElementById('psGreedyMs').textContent = `${greedy.time_ms} ms`;
-        document.getElementById('psFptMs').textContent = `${fpt.time_ms} ms`;
-        pskcpCompare.classList.remove('hidden');
-
-        const transplantDiff = data.transplant_improvement;
-        const stabilityDiff = data.stability_improvement;
-        pskcpVerdict.classList.remove('hidden');
-        const fallbackText = fpt.used_greedy_fallback
-            ? ' Greedy seed retained because the bounded kernel search did not improve it.'
-            : '';
-        pskcpVerdict.innerHTML =
-            `<strong style="color:var(--purple)">PS-KCP</strong> selected ${fpt.size} exchange cycles. ` +
-            `Kernel reduction: <strong>${fpt.kernel_reduction}%</strong>. ` +
-            `Delta vs greedy: ${transplantDiff >= 0 ? '+' : ''}${transplantDiff} transplants, ` +
-            `${stabilityDiff >= 0 ? '+' : ''}${stabilityDiff} fewer blocking cycles.` +
-            fallbackText;
-
-        renderPskcpCycleList(fpt.cycles || []);
-        highlightPskcpCycles(data.selected_edges || [], data.selected_nodes || []);
-    }
-
-    function renderPskcpCycleList(cycles) {
-        pskcpCycleList.innerHTML = '';
-        pskcpCycleList.classList.remove('hidden');
-
-        if (cycles.length === 0) {
-            pskcpCycleList.innerHTML = '<li class="cycle-empty">No stable cycle packing selected</li>';
-            return;
-        }
-
-        cycles.slice(0, 8).forEach(cycle => {
-            const li = document.createElement('li');
-            const path = cycle.nodes.join(' -> ');
-            li.innerHTML = `
-                <span><span class="cycle-num">${cycle.id}</span>${path}</span>
-                <span class="cycle-meta">${cycle.transplants} transplants | weight ${cycle.weight.toFixed(1)} | pref ${cycle.preference_gain.toFixed(1)}</span>`;
-            li.addEventListener('click', () => {
-                document.querySelectorAll('.pskcp-list li').forEach(item => item.classList.remove('active'));
-                li.classList.add('active');
-                highlightPskcpCycles(cycle.edges || [], cycle.nodes || []);
-                selectedCycleInfo.style.display = 'flex';
-                selectedCycleText.textContent = `PS-KCP ${cycle.id}: ${path}`;
-            });
-            pskcpCycleList.appendChild(li);
-        });
-    }
-
-    function highlightPskcpCycles(selectedEdges, selectedNodes) {
-        resetEdgeColors();
-        highlightMiamNodes(selectedNodes);
-
-        const allEdges = edgesDataset.get();
-        const updates = [];
-        selectedEdges.forEach(edgeInfo => {
-            const edge = allEdges.find(e => e.from === edgeInfo.from && e.to === edgeInfo.to);
-            if (edge) {
-                updates.push({
-                    id: edge.id,
-                    color: { color: '#3fb950', highlight: '#f0c060', hover: '#3fb950' },
-                    width: 4,
-                    shadow: { enabled: true, color: '#3fb950', size: 14 }
-                });
-            }
-        });
-        edgesDataset.update(updates);
-    }
-
-    // ── Toggle conflict edges overlay ─────────────────────────
-    toggleConflicts.addEventListener('click', () => {
-        if (showingConflicts) {
-            // Remove conflict edges
-            edgesDataset.remove(conflictEdgesVis);
-            conflictEdgesVis = [];
-            showingConflicts = false;
-            toggleConflicts.classList.remove('active');
-            toggleConflicts.innerHTML = `
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-                Show conflict edges`;
-        } else {
-            // Add conflict edges with a high-contrast dashed style for the dark graph.
-            const toAdd = conflictEdgesData.map((e, i) => ({
-                id:     `conflict_${i}`,
-                from:   e.from,
-                to:     e.to,
-                color:  {
-                    color:     '#ff2d75',
-                    highlight: '#ffb3cb',
-                    hover:     '#ff6b9f'
-                },
-                width:  4,
-                dashes: [12, 8],
-                arrows: { to: { enabled: false } },
-                shadow: { enabled: true, color: 'rgba(255,45,117,0.75)', size: 18, x: 0, y: 0 },
-                smooth: { enabled: true, type: 'continuous', roundness: 0.2 },
-                title:  'Conflict edge (resource constraint)'
-            }));
-            edgesDataset.add(toAdd);
-            conflictEdgesVis = toAdd.map(e => e.id);
-            showingConflicts = true;
-            toggleConflicts.classList.add('active');
-            toggleConflicts.innerHTML = `
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-                Hide conflict edges`;
-        }
+    document.getElementById('runGreedyBtn').addEventListener('click', () => {
+        runAlgorithm('/api/run/greedy', 'runGreedyBtn', 'greedyBtnText', 'Run Greedy Baseline', 'Running Greedy...');
     });
 
-    // ══════════════════════════════════════════════════════════
-    //  Formulation Comparison + Explainability
-    // ══════════════════════════════════════════════════════════
-
-    const runCompareBtn = document.getElementById('runCompareBtn');
-    const compareBtnText = document.getElementById('compareBtnText');
-    const compareLoader = document.getElementById('compareLoader');
-    const compareStats = document.getElementById('compareStats');
-    const compareTable = document.getElementById('compareTable');
-    const compareVerdict = document.getElementById('compareVerdict');
-    const highlightBtns = document.getElementById('highlightBtns');
-    const explainButtons = document.getElementById('explainButtons');
-    const explainPanel = document.getElementById('explainPanel');
-    const explainTitle = document.getElementById('explainTitle');
-    const explainBody = document.getElementById('explainBody');
-
-    let compareData = null;
-
-    runCompareBtn.addEventListener('click', async () => {
-        runCompareBtn.disabled = true;
-        compareBtnText.textContent = 'Comparing...';
-        compareLoader.classList.remove('hidden');
-        hudStatus.textContent = 'Running Greedy vs PS-KCP vs ILP comparison...';
-
-        try {
-            const res = await fetch('/api/compare');
-            const data = await res.json();
-
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-
-            compareData = data;
-            renderCompareResults(data);
-            hudStatus.textContent = 'Comparison complete - see results in sidebar';
-        } catch (e) {
-            console.error(e);
-            hudStatus.textContent = 'Comparison error';
-        } finally {
-            runCompareBtn.disabled = false;
-            compareBtnText.textContent = 'Re-run Comparisons';
-            compareLoader.classList.add('hidden');
-        }
+    document.getElementById('runPskcpBtn').addEventListener('click', () => {
+        runAlgorithm('/api/run/pskcp', 'runPskcpBtn', 'pskcpBtnText', 'Run PS-KCP (Hybrid)', 'Running PS-KCP...');
     });
 
-    function renderCompareResults(data) {
-        const f = data.formulations;
-        const g = f[0]; // Greedy
-        const p = f[1]; // PS-KCP
-        const ilp = f[2]; // ILP-CF
-
-        // Stats
-        document.getElementById('cmpTotalCycles').textContent = data.total_cycles_in_graph;
-        document.getElementById('cmpCandidates').textContent = data.candidate_count;
-        document.getElementById('cmpKernelSize').textContent = data.kernel_size + ' cycles';
-        compareStats.classList.remove('hidden');
-
-        // Table cells - add winner highlighting
-        const bestTx = Math.max(g.transplants, p.transplants, ilp.transplants);
-        const bestWt = Math.max(g.weight, p.weight, ilp.weight);
-        const bestMs = Math.min(g.time_ms, p.time_ms, ilp.time_ms || Infinity);
-
-        function val(v, isBest) {
-            return isBest ? `<strong style="color:var(--green);">${v}</strong>` : v;
-        }
-
-        document.getElementById('cmpGTx').innerHTML = val(g.transplants, g.transplants === bestTx);
-        document.getElementById('cmpPTx').innerHTML = val(p.transplants, p.transplants === bestTx);
-        document.getElementById('cmpITx').innerHTML = val(ilp.transplants, ilp.transplants === bestTx);
-
-        document.getElementById('cmpGWt').innerHTML = val(g.weight, g.weight === bestWt);
-        document.getElementById('cmpPWt').innerHTML = val(p.weight, p.weight === bestWt);
-        document.getElementById('cmpIWt').innerHTML = val(ilp.weight, ilp.weight === bestWt);
-
-        document.getElementById('cmpGMs').innerHTML = val(g.time_ms + ' ms', g.time_ms === bestMs);
-        document.getElementById('cmpPMs').innerHTML = val(p.time_ms + ' ms', p.time_ms === bestMs);
-        document.getElementById('cmpIMs').innerHTML = val((ilp.time_ms || 0) + ' ms', (ilp.time_ms || 0) === bestMs);
-
-        document.getElementById('cmpGSv').textContent = g.stability_violations;
-        document.getElementById('cmpPSv').textContent = p.stability_violations;
-        document.getElementById('cmpISv').textContent = ilp.stability_violations;
-
-        document.getElementById('cmpGType').textContent = g.type;
-        document.getElementById('cmpPType').textContent = p.type;
-        document.getElementById('cmpIType').textContent = ilp.type;
-
-        compareTable.classList.remove('hidden');
-
-        // Verdict
-        compareVerdict.classList.remove('hidden');
-        const winner = f.reduce((a, b) => a.transplants > b.transplants ? a : b);
-        const fastest = f.reduce((a, b) => a.time_ms < b.time_ms ? a : b);
-        compareVerdict.innerHTML =
-            `<strong style="color:var(--green);">${winner.abbrev}</strong> achieved the most transplants (${winner.transplants}). ` +
-            `<strong style="color:var(--blue);">${fastest.abbrev}</strong> was fastest (${fastest.time_ms} ms). ` +
-            `Kernel reduced candidates by <strong>${p.kernel_reduction}</strong>.`;
-
-        // Show highlight buttons
-        highlightBtns.classList.remove('hidden');
-        highlightBtns.style.display = 'flex';
-
-        // Show explain buttons
-        explainButtons.classList.remove('hidden');
-        explainPanel.classList.add('hidden');
-    }
-
-    // Highlight PS-KCP solution on graph
-    document.getElementById('hlPskcp').addEventListener('click', () => {
-        if (!compareData) return;
-        resetEdgeColors();
-        highlightPskcpCycles(compareData.pskcp_edges || [], compareData.pskcp_nodes || []);
-        hudStatus.textContent = 'Showing PS-KCP selected cycles';
+    document.getElementById('runIlpCfBtn').addEventListener('click', () => {
+        runAlgorithm('/api/run/ilp-cf', 'runIlpCfBtn', 'ilpCfBtnText', 'Run ILP (Cycle Formulation)', 'Running ILP-CF...');
     });
 
-    // Highlight ILP solution on graph
-    document.getElementById('hlIlp').addEventListener('click', () => {
-        if (!compareData) return;
-        resetEdgeColors();
-        // Highlight ILP edges in cyan
-        const allEdges = edgesDataset.get();
-        const updates = [];
-        (compareData.ilp_edges || []).forEach(edgeInfo => {
-            const edge = allEdges.find(e => e.from === edgeInfo.from && e.to === edgeInfo.to);
-            if (edge) {
-                updates.push({
-                    id: edge.id,
-                    color: { color: '#58a6ff', highlight: '#58a6ff', hover: '#58a6ff' },
-                    width: 4,
-                    shadow: { enabled: true, color: '#58a6ff', size: 14 }
-                });
-            }
-        });
-        edgesDataset.update(updates);
-        highlightMiamNodes(compareData.ilp_nodes || []);
-        hudStatus.textContent = 'Showing ILP-CF selected cycles';
+    document.getElementById('runIlpEfBtn').addEventListener('click', () => {
+        runAlgorithm('/api/run/ilp-ef', 'runIlpEfBtn', 'ilpEfBtnText', 'Run ILP (Edge Formulation)', 'Running ILP-EF...');
     });
 
-    // Explainability buttons
-    document.getElementById('explainGreedy').addEventListener('click', () => {
-        if (!compareData) return;
-        explainPanel.classList.remove('hidden');
-        explainTitle.textContent = 'Why did Greedy produce this result?';
-        explainBody.textContent = compareData.explain.greedy;
-        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('explainGreedy').classList.add('active');
-    });
+    // Explainability buttons logic removed as it's merged into cards or simplified.
 
-    document.getElementById('explainPskcp').addEventListener('click', () => {
-        if (!compareData) return;
-        explainPanel.classList.remove('hidden');
-        explainTitle.textContent = 'Why did PS-KCP produce this result?';
-        explainBody.textContent = compareData.explain.pskcp;
-        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('explainPskcp').classList.add('active');
-    });
-
-    document.getElementById('explainIlp').addEventListener('click', () => {
-        if (!compareData) return;
-        explainPanel.classList.remove('hidden');
-        explainTitle.textContent = 'Why did ILP-CF produce this result?';
-        explainBody.textContent = compareData.explain.ilp;
-        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('explainIlp').classList.add('active');
-    });
-
-    document.getElementById('explainTheory').addEventListener('click', () => {
-        if (!compareData) return;
-        explainPanel.classList.remove('hidden');
-        explainTitle.textContent = 'Formulation Theory (Barkel et al. EJOR 2026)';
-        const theory = compareData.explain.theory;
-        let html = '';
-        for (const [key, desc] of Object.entries(theory)) {
-            html += `<div class="theory-item"><strong>${key}</strong>: ${desc}</div>`;
-        }
-        explainBody.innerHTML = html;
-        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('explainTheory').classList.add('active');
-    });
 
 });

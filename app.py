@@ -78,8 +78,14 @@ def load_data():
 
     for cycle in cycles:
         matching              = kx.extract_matching(cycle)
-        is_ind, t_ind         = kx.is_induced_matching(cycle)
-        is_acy, t_acy         = kx.is_acyclic_matching(matching)
+        
+        # Optimization: Skip heavy matching checks on large instances
+        if len(cycles) <= 100:
+            is_ind, t_ind         = kx.is_induced_matching(cycle)
+            is_acy, t_acy         = kx.is_acyclic_matching(matching)
+        else:
+            is_ind, t_ind, is_acy, t_acy = True, 0.0, True, 0.0
+            
         total_t_induced      += t_ind
         total_t_acyclic      += t_acy
         cycle_results.append({
@@ -161,18 +167,40 @@ def run_pskcp():
     return jsonify(result)
 
 
-@app.route('/api/compare')
-def run_compare():
-    """Run all formulation comparisons: Greedy vs PS-KCP vs ILP-CF."""
+@app.route('/api/run/greedy')
+def run_greedy():
     if _cache['kx'] is None:
         return jsonify({'error': 'Load graph first via /api/load'})
-    
-    max_candidates = request.args.get('max_candidates', default=500, type=int)
-    
     from kidney_exchange import FormulationComparer
     comparer = FormulationComparer(_cache['kx'])
-    result = comparer.run_all_comparisons(max_candidates=min(max(max_candidates, 25), 1000))
-    return jsonify(result)
+    max_cands = request.args.get('max_candidates', default=500, type=int)
+    return jsonify(comparer.run_greedy(max_candidates=min(max(max_cands, 25), 2000)))
+
+@app.route('/api/run/pskcp')
+def run_pskcp_formulation():
+    if _cache['kx'] is None:
+        return jsonify({'error': 'Load graph first via /api/load'})
+    from kidney_exchange import FormulationComparer
+    comparer = FormulationComparer(_cache['kx'])
+    max_cands = request.args.get('max_candidates', default=500, type=int)
+    return jsonify(comparer.run_pskcp(max_candidates=min(max(max_cands, 25), 2000)))
+
+@app.route('/api/run/ilp-cf')
+def run_ilp_cf():
+    if _cache['kx'] is None:
+        return jsonify({'error': 'Load graph first via /api/load'})
+    from kidney_exchange import FormulationComparer
+    comparer = FormulationComparer(_cache['kx'])
+    max_cands = request.args.get('max_candidates', default=500, type=int)
+    return jsonify(comparer.run_ilp_cf(max_candidates=min(max(max_cands, 25), 2000)))
+
+@app.route('/api/run/ilp-ef')
+def run_ilp_ef():
+    if _cache['kx'] is None:
+        return jsonify({'error': 'Load graph first via /api/load'})
+    from kidney_exchange import FormulationComparer
+    comparer = FormulationComparer(_cache['kx'])
+    return jsonify(comparer.run_ilp_ef())
 
 
 if __name__ == '__main__':

@@ -894,206 +894,164 @@ class MIAMSolver:
         }
 
 class FormulationComparer:
-    """Compares PS-KCP with classical ILP formulations (CF, EF, EEF)
+    """Compares PS-KCP with classical ILP formulations (CF, EF)
     and provides explainability for selected solutions."""
     
     def __init__(self, kx: KidneyExchange):
         self.kx = kx
-    
-    def run_all_comparisons(self, max_candidates=500):
-        """Run PS-KCP, Greedy, and ILP (scipy MILP) on the same instance.
-        Also compute explainability data for each selected cycle."""
+        
+    def run_greedy(self, max_candidates=500):
+        pskcp_solver = PSKCPSolver(self.kx)
+        res = pskcp_solver.run(max_length=3, max_candidates=max_candidates)
+        greedy = res['greedy']
+        return {
+            'name': 'Greedy Baseline',
+            'abbrev': 'Greedy',
+            'transplants': greedy['transplants'],
+            'weight': round(greedy['weight'], 1),
+            'time_ms': round(greedy['time_ms'], 4),
+            'description': 'Sorts cycles by weight, greedily picks non-conflicting. Fast but can miss global optimum.'
+        }
+        
+    def run_pskcp(self, max_candidates=500):
+        pskcp_solver = PSKCPSolver(self.kx)
+        res = pskcp_solver.run(max_length=3, max_candidates=max_candidates)
+        fpt = res['fpt']
+        return {
+            'name': 'PS-KCP (FPT B&B)',
+            'abbrev': 'PS-KCP',
+            'transplants': fpt['transplants'],
+            'weight': round(fpt['weight'], 1),
+            'time_ms': round(fpt['time_ms'], 4),
+            'description': 'Kernelizes cycle-conflict graph, then branch-and-bound search with greedy fallback.'
+        }
+
+    def run_ilp_cf(self, max_candidates=500):
         import numpy as np
         from scipy.optimize import milp, LinearConstraint, Bounds
+        import time as _time
         
-        # 1. Run PS-KCP
         pskcp_solver = PSKCPSolver(self.kx)
-        pskcp_result = pskcp_solver.run(max_length=3, max_candidates=max_candidates)
-        
-        greedy = pskcp_result['greedy']
-        fpt = pskcp_result['fpt']
-        
-        # 2. Run ILP on kernel (CF-style: Cycle Formulation)
+        pskcp_solver.run(max_length=3, max_candidates=max_candidates)
         kernel, forced, removed = pskcp_solver.kernelise(top_per_patient=12)
+        
         kernel_ids = sorted(kernel)
         forced_ids = sorted(forced)
         forced_weight = sum(pskcp_solver.candidates[cid].weight for cid in forced_ids)
         forced_tx = sum(pskcp_solver.candidates[cid].transplant_count for cid in forced_ids)
         
-        ilp_result_data = {'transplants': 0, 'weight': 0, 'time_ms': 0, 'selected_cycles': [], 'method': 'ILP (CF on Kernel)'}
-        
-        if len(kernel_ids) > 0:
-            import time as _time
-            n_vars = len(kernel_ids)
-            id_to_idx = {cid: i for i, cid in enumerate(kernel_ids)}
-            weights = np.array([pskcp_solver.candidates[cid].weight for cid in kernel_ids])
-            c = -weights
-            
-            conflict_pairs = []
-            for i, cid_a in enumerate(kernel_ids):
-                for cid_b in pskcp_solver.conflict_adj.get(cid_a, set()):
-                    if cid_b in id_to_idx:
-                        j = id_to_idx[cid_b]
-                        if i < j:
-                            conflict_pairs.append((i, j))
-            
-            t0 = _time.perf_counter()
-            integrality = np.ones(n_vars)
-            bounds_obj = Bounds(lb=0, ub=1)
-            
-            if conflict_pairs:
-                A_ub = np.zeros((len(conflict_pairs), n_vars))
-                b_ub = np.ones(len(conflict_pairs))
-                for row, (i, j) in enumerate(conflict_pairs):
-                    A_ub[row, i] = 1
-                    A_ub[row, j] = 1
-                constraints = LinearConstraint(A_ub, ub=b_ub)
-                result_ilp = milp(c, integrality=integrality, bounds=bounds_obj, constraints=constraints)
-            else:
-                result_ilp = milp(c, integrality=integrality, bounds=bounds_obj)
-            
-            t_ilp = (_time.perf_counter() - t0) * 1000
-            
-            if result_ilp.success:
-                ilp_selected = [kernel_ids[i] for i in range(n_vars) if result_ilp.x[i] > 0.5]
-                all_selected = list(forced_ids) + ilp_selected
-                ilp_tx = sum(pskcp_solver.candidates[cid].transplant_count for cid in all_selected)
-                ilp_wt = sum(pskcp_solver.candidates[cid].weight for cid in all_selected)
-                ilp_cycles_detail = []
-                for cid in all_selected:
-                    cand = pskcp_solver.candidates[cid]
-                    ilp_cycles_detail.append({
-                        'id': cand.id, 'nodes': list(cand.nodes),
-                        'edges': [{'from': u, 'to': v} for u, v in cand.edges],
-                        'weight': cand.weight, 'transplants': cand.transplant_count,
-                    })
-                ilp_result_data = {
-                    'transplants': ilp_tx, 'weight': round(ilp_wt, 1),
-                    'time_ms': round(t_ilp, 4), 'selected_cycles': ilp_cycles_detail,
-                    'method': 'ILP (Cycle Formulation on Kernel)',
-                    'stability_violations': len(pskcp_solver.count_stability_violations(all_selected)),
-                }
-        else:
-            ilp_result_data = {
-                'transplants': forced_tx, 'weight': round(forced_weight, 1),
-                'time_ms': 0, 'selected_cycles': [],
-                'method': 'ILP (Cycle Formulation on Kernel)',
-                'stability_violations': 0,
-            }
-        
-        # 3. Build formulation comparison table
-        formulations = [
-            {
-                'name': 'Greedy Baseline',
-                'abbrev': 'Greedy',
-                'type': 'Heuristic',
-                'transplants': greedy['transplants'],
-                'weight': round(greedy['weight'], 1),
-                'time_ms': round(greedy['time_ms'], 4),
-                'stability_violations': greedy.get('stability_violations', '-'),
-                'kernel_reduction': '-',
-                'description': 'Sorts cycles by weight, greedily picks non-conflicting. Fast but can miss global optimum.',
-            },
-            {
-                'name': 'PS-KCP (FPT B&B)',
-                'abbrev': 'PS-KCP',
-                'type': 'Kernelized FPT',
-                'transplants': fpt['transplants'],
-                'weight': round(fpt['weight'], 1),
-                'time_ms': round(fpt['time_ms'], 4),
-                'stability_violations': fpt.get('stability_violations', '-'),
-                'kernel_reduction': f"{fpt.get('kernel_reduction', 0)}%",
-                'description': 'Kernelizes cycle-conflict graph, then branch-and-bound search with greedy fallback.',
-            },
-            {
+        if len(kernel_ids) == 0:
+            return {
                 'name': 'ILP Cycle Formulation',
                 'abbrev': 'ILP-CF',
-                'type': 'Integer Linear Program',
-                'transplants': ilp_result_data['transplants'],
-                'weight': ilp_result_data['weight'],
-                'time_ms': ilp_result_data['time_ms'],
-                'stability_violations': ilp_result_data.get('stability_violations', '-'),
-                'kernel_reduction': f"{fpt.get('kernel_reduction', 0)}%",
-                'description': 'Solves max-weight independent set on kernelized cycle-conflict graph using scipy MILP (HiGHS solver).',
-            },
+                'transplants': forced_tx,
+                'weight': round(forced_weight, 1),
+                'time_ms': 0,
+                'description': 'Solves max-weight independent set on kernelized cycle-conflict graph using scipy MILP.'
+            }
+            
+        n_vars = len(kernel_ids)
+        id_to_idx = {cid: i for i, cid in enumerate(kernel_ids)}
+        weights = np.array([pskcp_solver.candidates[cid].weight for cid in kernel_ids])
+        c = -weights
+        
+        conflict_pairs = []
+        for i, cid_a in enumerate(kernel_ids):
+            for cid_b in pskcp_solver.conflict_adj.get(cid_a, set()):
+                if cid_b in id_to_idx:
+                    j = id_to_idx[cid_b]
+                    if i < j:
+                        conflict_pairs.append((i, j))
+        
+        t0 = _time.perf_counter()
+        integrality = np.ones(n_vars)
+        bounds_obj = Bounds(lb=0, ub=1)
+        
+        if conflict_pairs:
+            A_ub = np.zeros((len(conflict_pairs), n_vars))
+            b_ub = np.ones(len(conflict_pairs))
+            for row, (i, j) in enumerate(conflict_pairs):
+                A_ub[row, i] = 1
+                A_ub[row, j] = 1
+            constraints = LinearConstraint(A_ub, ub=b_ub)
+            result_ilp = milp(c, integrality=integrality, bounds=bounds_obj, constraints=constraints)
+        else:
+            result_ilp = milp(c, integrality=integrality, bounds=bounds_obj)
+        
+        t_ilp = (_time.perf_counter() - t0) * 1000
+        
+        ilp_tx = forced_tx
+        ilp_wt = forced_weight
+        if result_ilp.success:
+            ilp_selected = [kernel_ids[i] for i in range(n_vars) if result_ilp.x[i] > 0.5]
+            ilp_tx += sum(pskcp_solver.candidates[cid].transplant_count for cid in ilp_selected)
+            ilp_wt += sum(pskcp_solver.candidates[cid].weight for cid in ilp_selected)
+            
+        return {
+            'name': 'ILP Cycle Formulation',
+            'abbrev': 'ILP-CF',
+            'transplants': ilp_tx,
+            'weight': round(ilp_wt, 1),
+            'time_ms': round(t_ilp, 4),
+            'description': 'Solves max-weight independent set on kernelized cycle-conflict graph using scipy MILP.'
+        }
+        
+    def run_ilp_ef(self):
+        """Standard Edge Formulation (EF) allowing unbounded cycle lengths."""
+        import numpy as np
+        import time as _time
+        from scipy.optimize import milp, LinearConstraint, Bounds
+        
+        edges = []
+        for u, neighbors in self.kx.adj_list.items():
+            for v in neighbors:
+                if u != v:
+                    edges.append((u, v))
+                    
+        n_edges = len(edges)
+        if n_edges == 0:
+            return {'name': 'ILP Edge Formulation', 'abbrev': 'ILP-EF', 'transplants': 0, 'weight': 0.0, 'time_ms': 0, 'description': 'Standard Edge Formulation. Maximizes transplants. No max cycle length limit.'}
+            
+        nodes = list(self.kx.nodes.keys())
+        node_to_idx = {n: i for i, n in enumerate(nodes)}
+        
+        c = -np.ones(n_edges)
+        
+        A_eq = np.zeros((len(nodes), n_edges))
+        A_ub = np.zeros((len(nodes), n_edges))
+        
+        for e_idx, (u, v) in enumerate(edges):
+            u_i = node_to_idx[u]
+            v_i = node_to_idx[v]
+            A_eq[u_i, e_idx] += 1
+            A_eq[v_i, e_idx] -= 1
+            A_ub[v_i, e_idx] += 1
+            
+        b_eq = np.zeros(len(nodes))
+        b_ub = np.ones(len(nodes))
+        
+        constraints = [
+            LinearConstraint(A_eq, lb=b_eq, ub=b_eq),
+            LinearConstraint(A_ub, ub=b_ub)
         ]
         
-        # 4. Determine best method
-        best_tx = max(f['transplants'] for f in formulations)
-        for f in formulations:
-            f['is_best'] = f['transplants'] == best_tx
+        integrality = np.ones(n_edges)
+        bounds_obj = Bounds(lb=0, ub=1)
         
-        # 5. Build explainability data
-        explain = self._build_explainability(pskcp_solver, pskcp_result, ilp_result_data, formulations)
+        t0 = _time.perf_counter()
+        result_ilp = milp(c, integrality=integrality, bounds=bounds_obj, constraints=constraints)
+        t_ilp = (_time.perf_counter() - t0) * 1000
         
+        tx = 0
+        if result_ilp.success:
+            selected = [edges[i] for i in range(n_edges) if result_ilp.x[i] > 0.5]
+            tx = len(selected)
+            
         return {
-            'formulations': formulations,
-            'candidate_count': pskcp_result['candidate_count'],
-            'kernel_size': fpt.get('kernel_size', 0),
-            'total_cycles_in_graph': len(self.kx.find_cycles(max_length=3)),
-            'explain': explain,
-            'ilp_edges': [e for c in ilp_result_data.get('selected_cycles', []) for e in c.get('edges', [])],
-            'ilp_nodes': sorted(set(n for c in ilp_result_data.get('selected_cycles', []) for n in c.get('nodes', []))),
-            'pskcp_edges': pskcp_result.get('selected_edges', []),
-            'pskcp_nodes': pskcp_result.get('selected_nodes', []),
-        }
-    
-    def _build_explainability(self, solver, pskcp_result, ilp_result, formulations):
-        """Build human-readable explanation of WHY each method produced its result."""
-        greedy = pskcp_result['greedy']
-        fpt = pskcp_result['fpt']
-        
-        explain_greedy = (
-            f"Greedy sorted {pskcp_result['candidate_count']} cycle candidates by weight (descending) "
-            f"and selected the heaviest non-conflicting cycle at each step. "
-            f"It found {greedy['transplants']} transplants in {greedy['time_ms']:.3f} ms. "
-        )
-        if fpt['transplants'] > greedy['transplants']:
-            explain_greedy += (
-                f"However, greedy missed {fpt['transplants'] - greedy['transplants']} transplants because "
-                f"an early high-weight cycle blocked multiple smaller disjoint cycles that together yield more."
-            )
-        else:
-            explain_greedy += "On this instance, greedy happened to find the same result as PS-KCP."
-        
-        explain_pskcp = (
-            f"PS-KCP first kernelized {pskcp_result['candidate_count']} candidates down to "
-            f"{fpt.get('kernel_size', '?')} ({fpt.get('kernel_reduction', 0)}% reduction) using 3 rules: "
-            f"duplicate removal, dominated cycle pruning, and forced safe-cycle selection. "
-            f"Then it ran a depth-limited branch-and-bound (max depth 30) with suffix-sum pruning. "
-            f"Result: {fpt['transplants']} transplants, weight {fpt['weight']:.1f}, "
-            f"{fpt.get('stability_violations', 0)} blocking cycles."
-        )
-        if fpt.get('used_greedy_fallback'):
-            explain_pskcp += " The B&B did not improve on greedy, so the greedy solution was returned."
-        
-        explain_ilp = (
-            f"ILP (Cycle Formulation) modeled the problem as: maximize total cycle weight subject to "
-            f"conflict constraints (x_i + x_j <= 1 for conflicting pairs). "
-            f"Solved on the same kernel using scipy's HiGHS backend. "
-            f"Result: {ilp_result['transplants']} transplants, weight {ilp_result['weight']}, "
-            f"solved in {ilp_result['time_ms']:.3f} ms."
-        )
-        if ilp_result['transplants'] > fpt['transplants']:
-            explain_ilp += (
-                f" ILP found {ilp_result['transplants'] - fpt['transplants']} MORE transplants than PS-KCP's B&B "
-                f"because ILP uses LP-relaxation bounds for pruning (much tighter than suffix-sum bounds) "
-                f"and has no depth limit."
-            )
-        
-        # Theory comparison with Barkel et al. survey formulations
-        theory = {
-            'CF': 'Cycle Formulation (CF): One binary variable per feasible cycle. Exponential variables but strongest LP relaxation. Used by Roth et al. (2007). Our ILP-CF is a simplified version of this.',
-            'EF': 'Edge Formulation (EF): One variable per arc. Polynomial size but weakest LP relaxation. Needs subtour elimination constraints.',
-            'EEF': 'Extended Edge Formulation (EEF): Adds position-tracking auxiliary variables. Polynomial size with tighter LP relaxation than EF.',
-            'PICEF': 'Position-Indexed Chain-Edge Formulation (PICEF): Best performer in Barkel et al. EJOR 2026 survey. Handles both cycles and chains compactly. Not implemented here.',
-            'HPIEF': 'Hybrid PICEF+EEF (HPIEF): Combines PICEF for chains with EEF for cycles. Strong on some instance types.',
-            'BnP': 'Branch-and-Price: Column generation approach. Starts with subset of cycles, iteratively adds improving ones via pricing. Scales to 1000+ pairs.',
-        }
-        
-        return {
-            'greedy': explain_greedy,
-            'pskcp': explain_pskcp,
-            'ilp': explain_ilp,
-            'theory': theory,
+            'name': 'ILP Edge Formulation',
+            'abbrev': 'ILP-EF',
+            'transplants': tx,
+            'weight': float(tx),
+            'time_ms': round(t_ilp, 4),
+            'description': 'Standard Edge Formulation. Maximizes flow (unweighted). Does not limit cycle length.'
         }

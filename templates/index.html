@@ -146,236 +146,48 @@
             <div class="section miam-section">
                 <div class="section-label">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    MIAM Algorithm
-                    <span class="new-badge">NEW</span>
+                    Algorithms
                 </div>
                 <p class="section-desc">
-                    Mixed Induced-Acyclic Matching with weighted kernelisation + FPT bounded search tree vs greedy baseline.
+                    Click to run individual algorithms. Results will appear in the right comparison panel.
                 </p>
 
-                <button id="runMiamBtn" class="miam-btn" disabled>
+                <button id="runGreedyBtn" class="miam-btn" style="margin-bottom:8px;" disabled>
                     <span class="btn-icon">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     </span>
-                    <span id="miamBtnText">Load graph first</span>
-                    <span class="btn-loader hidden" id="miamLoader"></span>
+                    <span id="greedyBtnText">Run Greedy Baseline</span>
                 </button>
 
-                <!-- Conflict Graph Stats -->
-                <div class="miam-stats hidden" id="miamStats">
-                    <div class="miam-row">
-                        <span class="miam-label">Conflict Edges (C)</span>
-                        <span class="miam-val rose" id="miamConflicts">—</span>
-                    </div>
-                    <div class="miam-row">
-                        <span class="miam-label">Kernel Size</span>
-                        <span class="miam-val gold" id="miamKernel">—</span>
-                    </div>
-                    <div class="miam-row">
-                        <span class="miam-label">Kernel Reduction</span>
-                        <span class="miam-val green" id="miamReduction">—</span>
-                    </div>
-                </div>
+                <button id="runPskcpBtn" class="miam-btn" style="margin-bottom:8px;" disabled>
+                    <span class="btn-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20"/><path d="M2 12h20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
+                    </span>
+                    <span id="pskcpBtnText">Run PS-KCP (Hybrid)</span>
+                </button>
 
-                <!-- Algorithm Comparison Table -->
-                <div class="compare-table hidden" id="miamCompare">
-                    <div class="compare-header">
-                        <span></span>
-                        <span class="cth blue">Greedy</span>
-                        <span class="cth purple">FPT (MIAM)</span>
-                    </div>
-                    <div class="compare-row">
-                        <span>Solution size</span>
-                        <span id="cmpGreedySize">—</span>
-                        <span id="cmpFptSize">—</span>
-                    </div>
-                    <div class="compare-row">
-                        <span>Total weight</span>
-                        <span id="cmpGreedyW">—</span>
-                        <span id="cmpFptW">—</span>
-                    </div>
-                    <div class="compare-row">
-                        <span>Runtime</span>
-                        <span id="cmpGreedyT">—</span>
-                        <span id="cmpFptT">—</span>
-                    </div>
-                    <div class="compare-verdict hidden" id="miamVerdict"></div>
-                </div>
+                <button id="runIlpCfBtn" class="miam-btn" style="margin-bottom:8px;" disabled>
+                    <span class="btn-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </span>
+                    <span id="ilpCfBtnText">Run ILP (Cycle Formulation)</span>
+                </button>
+
+                <button id="runIlpEfBtn" class="miam-btn" disabled>
+                    <span class="btn-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                    </span>
+                    <span id="ilpEfBtnText">Run ILP (Edge Formulation)</span>
+                </button>
 
                 <!-- Toggle conflict edges -->
-                <button class="toggle-btn hidden" id="toggleConflicts">
+                <button class="toggle-btn hidden" id="toggleConflicts" style="margin-top:16px;">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                     Show conflict edges
                 </button>
             </div>
 
-            <!-- ===== PS-KCP Hybrid Algorithm Section ===== -->
-            <div class="section miam-section">
-                <div class="section-label">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20"/><path d="M2 12h20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
-                    PS-KCP Hybrid
-                    <span class="new-badge">HYBRID</span>
-                </div>
-                <p class="section-desc">
-                    Preference-Stable Kernelized Cycle Packing selects disjoint 2/3-cycle exchanges using preference scoring, stability checks, and FPT search on a reduced cycle graph.
-                </p>
 
-                <button id="runPskcpBtn" class="miam-btn" disabled>
-                    <span class="btn-icon">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    </span>
-                    <span id="pskcpBtnText">Load graph first</span>
-                    <span class="btn-loader hidden" id="pskcpLoader"></span>
-                </button>
-
-                <div class="miam-stats hidden" id="pskcpStats">
-                    <div class="miam-row">
-                        <span class="miam-label">Cycle Candidates</span>
-                        <span class="miam-val blue" id="pskcpCandidates">-</span>
-                    </div>
-                    <div class="miam-row">
-                        <span class="miam-label">Kernel Size</span>
-                        <span class="miam-val gold" id="pskcpKernel">-</span>
-                    </div>
-                    <div class="miam-row">
-                        <span class="miam-label">Stable Violations</span>
-                        <span class="miam-val rose" id="pskcpViolations">-</span>
-                    </div>
-                </div>
-
-                <div class="compare-table hidden" id="pskcpCompare">
-                    <div class="compare-header">
-                        <span></span>
-                        <span class="cth blue">Greedy</span>
-                        <span class="cth purple">PS-KCP</span>
-                    </div>
-                    <div class="compare-row">
-                        <span>Transplants</span>
-                        <span id="psGreedyT">-</span>
-                        <span id="psFptT">-</span>
-                    </div>
-                    <div class="compare-row">
-                        <span>Total weight</span>
-                        <span id="psGreedyW">-</span>
-                        <span id="psFptW">-</span>
-                    </div>
-                    <div class="compare-row">
-                        <span>Runtime</span>
-                        <span id="psGreedyMs">-</span>
-                        <span id="psFptMs">-</span>
-                    </div>
-                    <div class="compare-verdict hidden" id="pskcpVerdict"></div>
-                </div>
-
-                <ul id="pskcpCycleList" class="cycle-list pskcp-list hidden"></ul>
-            </div>
-
-            <!-- ===== Formulation Comparison Section ===== -->
-            <div class="section miam-section">
-                <div class="section-label">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    Formulation Comparison
-                    <span class="new-badge" style="border-color:rgba(63,185,80,0.35);color:var(--green);background:rgba(63,185,80,0.08);">COMPARE</span>
-                </div>
-                <p class="section-desc">
-                    Compare Greedy vs PS-KCP vs ILP Cycle Formulation on the same instance. Click "Explain" to understand why each method produced its result.
-                </p>
-
-                <button id="runCompareBtn" class="miam-btn" disabled>
-                    <span class="btn-icon">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    </span>
-                    <span id="compareBtnText">Load graph first</span>
-                    <span class="btn-loader hidden" id="compareLoader"></span>
-                </button>
-
-                <!-- Comparison Stats -->
-                <div class="miam-stats hidden" id="compareStats">
-                    <div class="miam-row">
-                        <span class="miam-label">Total Cycles in Graph</span>
-                        <span class="miam-val blue" id="cmpTotalCycles">-</span>
-                    </div>
-                    <div class="miam-row">
-                        <span class="miam-label">Candidates Evaluated</span>
-                        <span class="miam-val gold" id="cmpCandidates">-</span>
-                    </div>
-                    <div class="miam-row">
-                        <span class="miam-label">Kernel Size</span>
-                        <span class="miam-val green" id="cmpKernelSize">-</span>
-                    </div>
-                </div>
-
-                <!-- 3-Way Comparison Table -->
-                <div class="compare-table hidden" id="compareTable">
-                    <div class="compare-header" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
-                        <span></span>
-                        <span class="cth blue">Greedy</span>
-                        <span class="cth purple">PS-KCP</span>
-                        <span class="cth" style="color:var(--green);">ILP-CF</span>
-                    </div>
-                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
-                        <span>Transplants</span>
-                        <span id="cmpGTx">-</span>
-                        <span id="cmpPTx">-</span>
-                        <span id="cmpITx">-</span>
-                    </div>
-                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
-                        <span>Total Weight</span>
-                        <span id="cmpGWt">-</span>
-                        <span id="cmpPWt">-</span>
-                        <span id="cmpIWt">-</span>
-                    </div>
-                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
-                        <span>Runtime</span>
-                        <span id="cmpGMs">-</span>
-                        <span id="cmpPMs">-</span>
-                        <span id="cmpIMs">-</span>
-                    </div>
-                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
-                        <span>Stability Viol.</span>
-                        <span id="cmpGSv">-</span>
-                        <span id="cmpPSv">-</span>
-                        <span id="cmpISv">-</span>
-                    </div>
-                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
-                        <span>Type</span>
-                        <span id="cmpGType">-</span>
-                        <span id="cmpPType">-</span>
-                        <span id="cmpIType">-</span>
-                    </div>
-                    <div class="compare-verdict hidden" id="compareVerdict"></div>
-                </div>
-
-                <!-- Highlight buttons -->
-                <div class="highlight-btns hidden" id="highlightBtns" style="display:flex;gap:6px;margin-top:10px;">
-                    <button class="toggle-btn" id="hlPskcp" style="flex:1;margin-top:0;">Show PS-KCP</button>
-                    <button class="toggle-btn" id="hlIlp" style="flex:1;margin-top:0;">Show ILP-CF</button>
-                </div>
-            </div>
-
-            <!-- ===== Explainability Section ===== -->
-            <div class="section miam-section">
-                <div class="section-label">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    Explainability
-                    <span class="new-badge" style="border-color:rgba(88,166,255,0.35);color:var(--blue);background:rgba(88,166,255,0.08);">WHY?</span>
-                </div>
-                <p class="section-desc">
-                    Click a method below to understand why it produced the result it did.
-                </p>
-
-                <div class="explain-buttons hidden" id="explainButtons">
-                    <button class="explain-btn" id="explainGreedy">Why Greedy?</button>
-                    <button class="explain-btn" id="explainPskcp">Why PS-KCP?</button>
-                    <button class="explain-btn" id="explainIlp">Why ILP-CF?</button>
-                    <button class="explain-btn" id="explainTheory">Theory (Survey)</button>
-                </div>
-
-                <div class="explain-panel hidden" id="explainPanel">
-                    <div class="explain-title" id="explainTitle"></div>
-                    <div class="explain-body" id="explainBody"></div>
-                </div>
-            </div>
 
             <!-- Footer -->
             <div class="sidebar-footer">
@@ -426,8 +238,31 @@
                 <div class="legend-sep"></div>
                 <div class="legend-item"><span class="legend-dot" style="background:#f0c060;box-shadow:0 0 8px #f0c060;"></span>Highlighted Cycle</div>
             </div>
-        </main>
     </div>
+    
+    <!-- Floating toggle button for Right Sidebar -->
+    <button class="floating-toggle-btn" id="toggleRightSidebar">
+        📊 Compare Results (<span id="compareCount">0</span>)
+    </button>
+
+    <!-- ===== RIGHT SIDEBAR (COMPARISON) ===== -->
+    <aside class="right-sidebar" id="rightSidebar">
+        <div class="sidebar-header">
+            <div>
+                <h2 style="margin:0; font-size:16px; color:var(--text-1); font-weight:600;">Algorithm Comparison</h2>
+                <p style="margin:4px 0 0; font-size:12px; color:var(--text-2);">Side-by-side run results</p>
+            </div>
+            <button id="closeRightSidebar" style="background:transparent; border:none; color:var(--text-2); cursor:pointer;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        
+        <div class="compare-cards-container" id="compareCardsContainer">
+            <div class="empty-compare" id="emptyCompare">
+                Run an algorithm from the left panel to add it to the comparison.
+            </div>
+        </div>
+    </aside>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
