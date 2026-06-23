@@ -36,12 +36,13 @@ Standard KEP solvers find cycles and chains using Integer Linear Programming but
 |---------|-------------|
 | 🔬 **MIAM Algorithm** | FPT algorithm with weighted kernelisation + bounded search tree |
 | **PS-KCP Hybrid** | Preference-stable cycle packing with greedy seed + kernelized FPT search |
+| 🧮 **ILP Formulations** | Cycle Formulation (CF) and Edge Formulation (EF) using SciPy MILP |
+| 📊 **Side-by-Side Comparison** | Modular right sidebar dashboard comparing Greedy, PS-KCP, ILP-CF, and ILP-EF results |
 | 🧠 **Kernelisation** | 3 reduction rules (isolated removal, forced inclusion, dominated vertex) |
-| ⚡ **Greedy Baseline** | O(n²) greedy MIAM for comparison |
-| 📊 **Algorithm Benchmark** | Induced vs Acyclic matching time comparison across all cycles |
+| ⚡ **Greedy Baseline** | O(n²) greedy solver for baseline comparison |
 | 🕸️ **Graph Visualisation** | Interactive vis-network graph with blood-type colour coding |
 | ⚔️ **Conflict Overlay** | Toggle dashed red conflict edges on the compatibility graph |
-| 🏅 **MIAM Highlight** | Gold-bordered nodes show the optimal MIAM solution |
+| 🏅 **Cycle Highlight** | View exactly which cycles were selected by each method directly on the graph |
 | 🎨 **Premium Dark UI** | Glassmorphism sidebar, animated particle background, JetBrains Mono stats |
 
 ---
