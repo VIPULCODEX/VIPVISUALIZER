@@ -3,7 +3,7 @@
 
 from flask import Flask, jsonify, render_template, request
 import os
-from kidney_exchange import KidneyExchange, MIAMSolver, PSKCPSolver
+from kidney_exchange import KidneyExchange, MIAMSolver, PSKCPSolver, FormulationComparer
 
 app = Flask(__name__)
 
@@ -139,6 +139,20 @@ def run_pskcp():
         num_hospitals=min(max(num_hospitals, 1), 25),
         top_per_patient=min(max(top_per_patient, 3), 30),
     )
+    return jsonify(result)
+
+
+@app.route('/api/compare')
+def run_compare():
+    """Run all formulation comparisons: Greedy vs PS-KCP vs ILP-CF."""
+    if _cache['kx'] is None:
+        return jsonify({'error': 'Load graph first via /api/load'})
+    
+    max_candidates = request.args.get('max_candidates', default=500, type=int)
+    
+    from kidney_exchange import FormulationComparer
+    comparer = FormulationComparer(_cache['kx'])
+    result = comparer.run_all_comparisons(max_candidates=min(max(max_candidates, 25), 1000))
     return jsonify(result)
 
 

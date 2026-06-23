@@ -262,6 +262,113 @@
                 <ul id="pskcpCycleList" class="cycle-list pskcp-list hidden"></ul>
             </div>
 
+            <!-- ===== Formulation Comparison Section ===== -->
+            <div class="section miam-section">
+                <div class="section-label">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    Formulation Comparison
+                    <span class="new-badge" style="border-color:rgba(63,185,80,0.35);color:var(--green);background:rgba(63,185,80,0.08);">COMPARE</span>
+                </div>
+                <p class="section-desc">
+                    Compare Greedy vs PS-KCP vs ILP Cycle Formulation on the same instance. Click "Explain" to understand why each method produced its result.
+                </p>
+
+                <button id="runCompareBtn" class="miam-btn" disabled>
+                    <span class="btn-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </span>
+                    <span id="compareBtnText">Load graph first</span>
+                    <span class="btn-loader hidden" id="compareLoader"></span>
+                </button>
+
+                <!-- Comparison Stats -->
+                <div class="miam-stats hidden" id="compareStats">
+                    <div class="miam-row">
+                        <span class="miam-label">Total Cycles in Graph</span>
+                        <span class="miam-val blue" id="cmpTotalCycles">-</span>
+                    </div>
+                    <div class="miam-row">
+                        <span class="miam-label">Candidates Evaluated</span>
+                        <span class="miam-val gold" id="cmpCandidates">-</span>
+                    </div>
+                    <div class="miam-row">
+                        <span class="miam-label">Kernel Size</span>
+                        <span class="miam-val green" id="cmpKernelSize">-</span>
+                    </div>
+                </div>
+
+                <!-- 3-Way Comparison Table -->
+                <div class="compare-table hidden" id="compareTable">
+                    <div class="compare-header" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
+                        <span></span>
+                        <span class="cth blue">Greedy</span>
+                        <span class="cth purple">PS-KCP</span>
+                        <span class="cth" style="color:var(--green);">ILP-CF</span>
+                    </div>
+                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
+                        <span>Transplants</span>
+                        <span id="cmpGTx">-</span>
+                        <span id="cmpPTx">-</span>
+                        <span id="cmpITx">-</span>
+                    </div>
+                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
+                        <span>Total Weight</span>
+                        <span id="cmpGWt">-</span>
+                        <span id="cmpPWt">-</span>
+                        <span id="cmpIWt">-</span>
+                    </div>
+                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
+                        <span>Runtime</span>
+                        <span id="cmpGMs">-</span>
+                        <span id="cmpPMs">-</span>
+                        <span id="cmpIMs">-</span>
+                    </div>
+                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
+                        <span>Stability Viol.</span>
+                        <span id="cmpGSv">-</span>
+                        <span id="cmpPSv">-</span>
+                        <span id="cmpISv">-</span>
+                    </div>
+                    <div class="compare-row" style="grid-template-columns: 1.4fr 0.7fr 0.7fr 0.7fr;">
+                        <span>Type</span>
+                        <span id="cmpGType">-</span>
+                        <span id="cmpPType">-</span>
+                        <span id="cmpIType">-</span>
+                    </div>
+                    <div class="compare-verdict hidden" id="compareVerdict"></div>
+                </div>
+
+                <!-- Highlight buttons -->
+                <div class="highlight-btns hidden" id="highlightBtns" style="display:flex;gap:6px;margin-top:10px;">
+                    <button class="toggle-btn" id="hlPskcp" style="flex:1;margin-top:0;">Show PS-KCP</button>
+                    <button class="toggle-btn" id="hlIlp" style="flex:1;margin-top:0;">Show ILP-CF</button>
+                </div>
+            </div>
+
+            <!-- ===== Explainability Section ===== -->
+            <div class="section miam-section">
+                <div class="section-label">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    Explainability
+                    <span class="new-badge" style="border-color:rgba(88,166,255,0.35);color:var(--blue);background:rgba(88,166,255,0.08);">WHY?</span>
+                </div>
+                <p class="section-desc">
+                    Click a method below to understand why it produced the result it did.
+                </p>
+
+                <div class="explain-buttons hidden" id="explainButtons">
+                    <button class="explain-btn" id="explainGreedy">Why Greedy?</button>
+                    <button class="explain-btn" id="explainPskcp">Why PS-KCP?</button>
+                    <button class="explain-btn" id="explainIlp">Why ILP-CF?</button>
+                    <button class="explain-btn" id="explainTheory">Theory (Survey)</button>
+                </div>
+
+                <div class="explain-panel hidden" id="explainPanel">
+                    <div class="explain-title" id="explainTitle"></div>
+                    <div class="explain-body" id="explainBody"></div>
+                </div>
+            </div>
+
             <!-- Footer -->
             <div class="sidebar-footer">
                 © First Placement by Vipul Sharma

@@ -377,6 +377,8 @@ document.addEventListener('DOMContentLoaded', () => {
         miamBtnText.textContent = 'Run MIAM Algorithm';
         runPskcpBtn.disabled    = false;
         pskcpBtnText.textContent = 'Run PS-KCP Hybrid';
+        runCompareBtn.disabled    = false;
+        compareBtnText.textContent = 'Run All Comparisons';
     }
 
     // Call enableMiam after successful graph load
@@ -629,6 +631,186 @@ document.addEventListener('DOMContentLoaded', () => {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                 Hide conflict edges`;
         }
+    });
+
+    // ══════════════════════════════════════════════════════════
+    //  Formulation Comparison + Explainability
+    // ══════════════════════════════════════════════════════════
+
+    const runCompareBtn = document.getElementById('runCompareBtn');
+    const compareBtnText = document.getElementById('compareBtnText');
+    const compareLoader = document.getElementById('compareLoader');
+    const compareStats = document.getElementById('compareStats');
+    const compareTable = document.getElementById('compareTable');
+    const compareVerdict = document.getElementById('compareVerdict');
+    const highlightBtns = document.getElementById('highlightBtns');
+    const explainButtons = document.getElementById('explainButtons');
+    const explainPanel = document.getElementById('explainPanel');
+    const explainTitle = document.getElementById('explainTitle');
+    const explainBody = document.getElementById('explainBody');
+
+    let compareData = null;
+
+    runCompareBtn.addEventListener('click', async () => {
+        runCompareBtn.disabled = true;
+        compareBtnText.textContent = 'Comparing...';
+        compareLoader.classList.remove('hidden');
+        hudStatus.textContent = 'Running Greedy vs PS-KCP vs ILP comparison...';
+
+        try {
+            const res = await fetch('/api/compare');
+            const data = await res.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            compareData = data;
+            renderCompareResults(data);
+            hudStatus.textContent = 'Comparison complete - see results in sidebar';
+        } catch (e) {
+            console.error(e);
+            hudStatus.textContent = 'Comparison error';
+        } finally {
+            runCompareBtn.disabled = false;
+            compareBtnText.textContent = 'Re-run Comparisons';
+            compareLoader.classList.add('hidden');
+        }
+    });
+
+    function renderCompareResults(data) {
+        const f = data.formulations;
+        const g = f[0]; // Greedy
+        const p = f[1]; // PS-KCP
+        const ilp = f[2]; // ILP-CF
+
+        // Stats
+        document.getElementById('cmpTotalCycles').textContent = data.total_cycles_in_graph;
+        document.getElementById('cmpCandidates').textContent = data.candidate_count;
+        document.getElementById('cmpKernelSize').textContent = data.kernel_size + ' cycles';
+        compareStats.classList.remove('hidden');
+
+        // Table cells - add winner highlighting
+        const bestTx = Math.max(g.transplants, p.transplants, ilp.transplants);
+        const bestWt = Math.max(g.weight, p.weight, ilp.weight);
+        const bestMs = Math.min(g.time_ms, p.time_ms, ilp.time_ms || Infinity);
+
+        function val(v, isBest) {
+            return isBest ? `<strong style="color:var(--green);">${v}</strong>` : v;
+        }
+
+        document.getElementById('cmpGTx').innerHTML = val(g.transplants, g.transplants === bestTx);
+        document.getElementById('cmpPTx').innerHTML = val(p.transplants, p.transplants === bestTx);
+        document.getElementById('cmpITx').innerHTML = val(ilp.transplants, ilp.transplants === bestTx);
+
+        document.getElementById('cmpGWt').innerHTML = val(g.weight, g.weight === bestWt);
+        document.getElementById('cmpPWt').innerHTML = val(p.weight, p.weight === bestWt);
+        document.getElementById('cmpIWt').innerHTML = val(ilp.weight, ilp.weight === bestWt);
+
+        document.getElementById('cmpGMs').innerHTML = val(g.time_ms + ' ms', g.time_ms === bestMs);
+        document.getElementById('cmpPMs').innerHTML = val(p.time_ms + ' ms', p.time_ms === bestMs);
+        document.getElementById('cmpIMs').innerHTML = val((ilp.time_ms || 0) + ' ms', (ilp.time_ms || 0) === bestMs);
+
+        document.getElementById('cmpGSv').textContent = g.stability_violations;
+        document.getElementById('cmpPSv').textContent = p.stability_violations;
+        document.getElementById('cmpISv').textContent = ilp.stability_violations;
+
+        document.getElementById('cmpGType').textContent = g.type;
+        document.getElementById('cmpPType').textContent = p.type;
+        document.getElementById('cmpIType').textContent = ilp.type;
+
+        compareTable.classList.remove('hidden');
+
+        // Verdict
+        compareVerdict.classList.remove('hidden');
+        const winner = f.reduce((a, b) => a.transplants > b.transplants ? a : b);
+        const fastest = f.reduce((a, b) => a.time_ms < b.time_ms ? a : b);
+        compareVerdict.innerHTML =
+            `<strong style="color:var(--green);">${winner.abbrev}</strong> achieved the most transplants (${winner.transplants}). ` +
+            `<strong style="color:var(--blue);">${fastest.abbrev}</strong> was fastest (${fastest.time_ms} ms). ` +
+            `Kernel reduced candidates by <strong>${p.kernel_reduction}</strong>.`;
+
+        // Show highlight buttons
+        highlightBtns.classList.remove('hidden');
+        highlightBtns.style.display = 'flex';
+
+        // Show explain buttons
+        explainButtons.classList.remove('hidden');
+        explainPanel.classList.add('hidden');
+    }
+
+    // Highlight PS-KCP solution on graph
+    document.getElementById('hlPskcp').addEventListener('click', () => {
+        if (!compareData) return;
+        resetEdgeColors();
+        highlightPskcpCycles(compareData.pskcp_edges || [], compareData.pskcp_nodes || []);
+        hudStatus.textContent = 'Showing PS-KCP selected cycles';
+    });
+
+    // Highlight ILP solution on graph
+    document.getElementById('hlIlp').addEventListener('click', () => {
+        if (!compareData) return;
+        resetEdgeColors();
+        // Highlight ILP edges in cyan
+        const allEdges = edgesDataset.get();
+        const updates = [];
+        (compareData.ilp_edges || []).forEach(edgeInfo => {
+            const edge = allEdges.find(e => e.from === edgeInfo.from && e.to === edgeInfo.to);
+            if (edge) {
+                updates.push({
+                    id: edge.id,
+                    color: { color: '#58a6ff', highlight: '#58a6ff', hover: '#58a6ff' },
+                    width: 4,
+                    shadow: { enabled: true, color: '#58a6ff', size: 14 }
+                });
+            }
+        });
+        edgesDataset.update(updates);
+        highlightMiamNodes(compareData.ilp_nodes || []);
+        hudStatus.textContent = 'Showing ILP-CF selected cycles';
+    });
+
+    // Explainability buttons
+    document.getElementById('explainGreedy').addEventListener('click', () => {
+        if (!compareData) return;
+        explainPanel.classList.remove('hidden');
+        explainTitle.textContent = 'Why did Greedy produce this result?';
+        explainBody.textContent = compareData.explain.greedy;
+        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('explainGreedy').classList.add('active');
+    });
+
+    document.getElementById('explainPskcp').addEventListener('click', () => {
+        if (!compareData) return;
+        explainPanel.classList.remove('hidden');
+        explainTitle.textContent = 'Why did PS-KCP produce this result?';
+        explainBody.textContent = compareData.explain.pskcp;
+        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('explainPskcp').classList.add('active');
+    });
+
+    document.getElementById('explainIlp').addEventListener('click', () => {
+        if (!compareData) return;
+        explainPanel.classList.remove('hidden');
+        explainTitle.textContent = 'Why did ILP-CF produce this result?';
+        explainBody.textContent = compareData.explain.ilp;
+        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('explainIlp').classList.add('active');
+    });
+
+    document.getElementById('explainTheory').addEventListener('click', () => {
+        if (!compareData) return;
+        explainPanel.classList.remove('hidden');
+        explainTitle.textContent = 'Formulation Theory (Barkel et al. EJOR 2026)';
+        const theory = compareData.explain.theory;
+        let html = '';
+        for (const [key, desc] of Object.entries(theory)) {
+            html += `<div class="theory-item"><strong>${key}</strong>: ${desc}</div>`;
+        }
+        explainBody.innerHTML = html;
+        document.querySelectorAll('.explain-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('explainTheory').classList.add('active');
     });
 
 });

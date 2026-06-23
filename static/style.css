@@ -801,6 +801,109 @@ body {
     to { opacity: 1; transform: scale(1); }
 }
 
+/* ============================================================
+   FORMULATION COMPARISON + EXPLAINABILITY
+   ============================================================ */
+
+.highlight-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.highlight-btns .toggle-btn {
+    flex: 1;
+    margin-top: 0;
+    font-size: 11px;
+    padding: 8px 10px;
+}
+
+.highlight-btns .toggle-btn:hover {
+    border-color: var(--green);
+    color: var(--green);
+}
+
+.explain-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.explain-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 8px 6px;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+    background: var(--panel-bg);
+    color: var(--text-2);
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+}
+
+.explain-btn:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    background: var(--blue-dim);
+}
+
+.explain-btn.active {
+    border-color: var(--blue);
+    color: var(--blue);
+    background: var(--blue-dim);
+    box-shadow: 0 0 8px var(--blue-glow);
+}
+
+.explain-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    animation: fadeInUp 0.3s ease;
+}
+
+.explain-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.explain-body {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.6;
+}
+
+.theory-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--panel-border);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.theory-item:last-child {
+    border-bottom: none;
+}
+
+.theory-item strong {
+    color: var(--gold);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Winner highlight in compare table */
+.compare-row span strong {
+    text-shadow: 0 0 8px var(--green-glow);
+}
 .animate-in {
     animation: fadeInUp 0.4s ease forwards;
 }
