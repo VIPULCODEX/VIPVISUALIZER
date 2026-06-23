@@ -111,11 +111,13 @@ VIPVISUALIZER/
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Serve the main UI |
-| `GET /api/load?nodes=N` | Load N rows from CSV, build graph, find cycles |
+| `GET /api/datasets` | List available PrefLib dataset instances |
+| `GET /api/load?dataset_id=X&nodes=N` | Load synthetic CSV (N nodes) or a specific PrefLib instance (wmd/dat) |
 | `GET /api/graph` | Return graph nodes + edges (cached) |
 | `GET /api/cycles` | Return cycles + induced/acyclic benchmark times |
 | `GET /api/miam` | Run full MIAM pipeline (conflict graph + greedy + FPT) |
 | `GET /api/pskcp` | Run PS-KCP hybrid cycle packing with preference/stability scoring |
+| `GET /api/compare` | Run side-by-side ILP Cycle Formulation, Greedy, and PS-KCP comparison |
 
 ---
 
@@ -133,14 +135,13 @@ Open [http://localhost:5000](http://localhost:5000)
 
 ## 📚 Research Background
 
-Based on the paper:
-> *"The Parameterized Complexity of the Induced Matching Problem"*  
-> Hannes Moser and Somnath Sikdar
+Based on the survey:
+> *"Operational research approaches and mathematical models for kidney exchange: A literature survey and empirical evaluation"*  
+> Barkel, Colley, Delorme, Manlove, Pettersson (EJOR 2026)
 
-Key results applied:
-- Linear kernel on bounded-degree graphs (kidney graphs have max degree ≤ 6 by blood type structure)
-- FPT algorithm via kernelisation + bounded search tree
-- W[1]-hardness on general bipartite graphs (justifies restricting to kidney graph structure)
+Key integrations:
+- **PrefLib Benchmark Data**: Fully supports John Dickerson's standard synthetic kidney exchange instances (Saidman generator) `.wmd` and `.dat` formats for testing models up to 2048 nodes.
+- **Formulation Comparison**: Directly compare the Cycle Formulation ILP (solved via scipy.optimize.milp) against the kernelized B&B solver (PS-KCP).
 
 ---
 
