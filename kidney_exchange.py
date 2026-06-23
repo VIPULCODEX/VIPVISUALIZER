@@ -931,9 +931,19 @@ class FormulationComparer:
         }
 
     def run_ilp_cf(self, max_candidates=500):
-        import numpy as np
-        from scipy.optimize import milp, LinearConstraint, Bounds
-        import time as _time
+        try:
+            import numpy as np
+            from scipy.optimize import milp, LinearConstraint, Bounds
+            import time as _time
+        except ImportError:
+            return {
+                'name': 'ILP Cycle Formulation',
+                'abbrev': 'ILP-CF',
+                'transplants': 0,
+                'weight': 0.0,
+                'time_ms': 0,
+                'description': 'ERROR: scipy/numpy not installed. Cannot run ILP on this environment.'
+            }
         
         pskcp_solver = PSKCPSolver(self.kx)
         pskcp_solver.run(max_length=3, max_candidates=max_candidates)
@@ -1002,10 +1012,21 @@ class FormulationComparer:
         
     def run_ilp_ef(self):
         """Standard Edge Formulation (EF) allowing unbounded cycle lengths."""
-        import numpy as np
-        import time as _time
-        from scipy.optimize import milp, LinearConstraint, Bounds
+        try:
+            import numpy as np
+            from scipy.optimize import milp, LinearConstraint, Bounds
+            import time as _time
+        except ImportError:
+            return {
+                'name': 'ILP Edge Formulation',
+                'abbrev': 'ILP-EF',
+                'transplants': 0,
+                'weight': 0.0,
+                'time_ms': 0,
+                'description': 'ERROR: scipy/numpy not installed. Cannot run ILP on this environment.'
+            }
         
+        t0 = _time.perf_counter()
         edges = []
         for u, neighbors in self.kx.adj_list.items():
             for v in neighbors:
