@@ -34,7 +34,7 @@ def list_datasets():
 
 @app.route('/api/load')
 def load_data():
-    dataset_id = request.args.get('dataset_id', default='csv', type=str)
+    dataset_id = request.args.get('dataset_id', default='00036-00000001', type=str)
     
     kx = KidneyExchange()
     if dataset_id == 'csv':

@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const group = document.createElement('optgroup');
                 group.label = 'PrefLib Instances (EJOR 2026)';
                 data.datasets.forEach(ds => {
+                    if (ds === '00036-00000001') return;
                     const opt = document.createElement('option');
                     opt.value = ds;
                     opt.textContent = ds;
@@ -207,8 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dataLoad.success) {
                 hudStatus.textContent = 'Building graph…';
                 await Promise.all([fetchGraph(), fetchCycles()]);
-                hudStatus.textContent = `Graph loaded — ${numNodes} patients visualised`;
-                enableMiam();  // unlock MIAM button after successful load
+                hudStatus.textContent = `Graph loaded successfully`;
+                enableRunButtons();  // unlock algorithm buttons after successful load
             } else {
                 hudStatus.textContent = 'Error loading data';
                 alert('Failed to load dataset from server.');
