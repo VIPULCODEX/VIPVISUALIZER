@@ -23,7 +23,7 @@ pinned: false
 **[https://huggingface.co/spaces/Vipulcdex/visualizervp](https://huggingface.co/spaces/Vipulcdex/visualizervp)**
 **Direct Mobile App Link:** [https://vipulcdex-visualizervp.hf.space](https://vipulcdex-visualizervp.hf.space)
 
-> ⚠️ Hosted on Render free tier — app may take ~30 seconds to wake up on first visit.
+> 🚀 Hosted on Hugging Face Spaces (Docker / 16GB RAM) — fully optimized for complex MIAM & ILP calculations.
 
 ---
 
@@ -109,10 +109,10 @@ VIPVISUALIZER/
 │   └── index.html                      # Frontend HTML
 ├── static/
 │   ├── style.css                       # Premium dark UI CSS
-│   └── script.js                       # Vis-network + MIAM/PS-KCP frontend logic
-├── Procfile                            # Render/gunicorn start command
-├── render.yaml                         # Render one-click deploy blueprint
-└── requirements.txt                    # Flask, pandas, gunicorn
+│   ├── script.js                       # Vis-network + MIAM/PS-KCP frontend logic
+│   └── manifest.json                   # PWA Manifest for mobile app install
+├── Dockerfile                          # Hugging Face Spaces Docker config
+└── requirements.txt                    # Flask, pandas, gunicorn, scipy, numpy
 ```
 
 ---
