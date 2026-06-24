@@ -41,6 +41,8 @@ def load_data():
         num_nodes = request.args.get('nodes', default=50, type=int)
         csv_path  = os.path.join(os.path.dirname(__file__),
                                  'Kidney_Organ_SupplyChain_RawDataset.csv')
+        if not os.path.exists(csv_path):
+            csv_path = os.path.join(os.path.dirname(__file__), 'dataset', 'Kidney_Organ_SupplyChain_RawDataset.csv')
         if not kx.load_from_csv(csv_path, max_rows=num_nodes):
             return jsonify({'error': 'Failed to load CSV'})
         kx.build_graph()
