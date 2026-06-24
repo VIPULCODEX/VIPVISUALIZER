@@ -1,9 +1,18 @@
+---
+title: VIPVisualizer Kidney Exchange
+emoji: 🚀
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # VIPvisualize — Kidney Exchange Graph Simulator
 
 > **A Conflict-Free Kidney Exchange Algorithm via Mixed Induced-Acyclic Matching (MIAM)**  
 > Minor Project | Parameterized Complexity Research
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-vipvisualizer.onrender.com-blue?style=for-the-badge&logo=render)](https://vipvisualizer.onrender.com)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-HuggingFace%20Space-blue?style=for-the-badge&logo=huggingface)](https://huggingface.co/spaces/Vipulcdex/visualizervp)
 [![Python](https://img.shields.io/badge/Python-3.11-blue?style=flat-square&logo=python)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-2.x-black?style=flat-square&logo=flask)](https://flask.palletsprojects.com)
 
@@ -11,7 +20,8 @@
 
 ## 🌐 Live Demo
 
-**[https://vipvisualizer.onrender.com](https://vipvisualizer.onrender.com)**
+**[https://huggingface.co/spaces/Vipulcdex/visualizervp](https://huggingface.co/spaces/Vipulcdex/visualizervp)**
+**Direct Mobile App Link:** [https://vipulcdex-visualizervp.hf.space](https://vipulcdex-visualizervp.hf.space)
 
 > ⚠️ Hosted on Render free tier — app may take ~30 seconds to wake up on first visit.
 
