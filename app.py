@@ -2,10 +2,13 @@
 # All rights reserved. Do not remove this notice.
 
 from flask import Flask, jsonify, render_template, request
+from werkzeug.exceptions import HTTPException
 import os
 from kidney_exchange import KidneyExchange, MIAMSolver, PSKCPSolver, FormulationComparer
 
 app = Flask(__name__)
+MAX_INTERACTIVE_NODES = int(os.environ.get('MAX_INTERACTIVE_NODES', 256))
+CYCLE_RESULT_LIMIT = int(os.environ.get('CYCLE_RESULT_LIMIT', 5000))
 
 # ── In-memory cache ──────────────────────────────────────────
 _cache = {
@@ -13,6 +16,43 @@ _cache = {
     'cycles': None,   # {cycles, count, times}
     'kx':     None,   # KidneyExchange instance (kept for MIAM)
 }
+
+
+def _api_error(message, status=400):
+    return jsonify({'success': False, 'error': message}), status
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc):
+    if request.path.startswith('/api/'):
+        if isinstance(exc, HTTPException):
+            return _api_error(exc.description, exc.code)
+        app.logger.exception("Unhandled API error")
+        return _api_error(str(exc), 500)
+    if isinstance(exc, HTTPException):
+        return exc
+    app.logger.exception("Unhandled page error")
+    raise exc
+
+
+def _safe_dataset_id(dataset_id):
+    return os.path.basename(dataset_id).replace('.wmd', '').replace('.dat', '')
+
+
+def _preflib_metadata(wmd_path):
+    meta = {'nodes': None, 'edges': None}
+    try:
+        with open(wmd_path, 'r') as f:
+            for line in f:
+                if line.startswith('# NUMBER ALTERNATIVES:'):
+                    meta['nodes'] = int(line.split(':', 1)[1].strip())
+                elif line.startswith('# NUMBER EDGES:'):
+                    meta['edges'] = int(line.split(':', 1)[1].strip())
+                elif not line.startswith('#'):
+                    break
+    except (OSError, ValueError):
+        pass
+    return meta
 
 
 @app.route('/')
@@ -27,14 +67,28 @@ def list_datasets():
     if not os.path.exists(ds_dir):
         return jsonify({'datasets': []})
     files = os.listdir(ds_dir)
-    # Get all unique prefixes from .wmd files
-    prefixes = sorted(list(set([f.split('.')[0] for f in files if f.endswith('.wmd')])))
-    return jsonify({'datasets': prefixes})
+    datasets = []
+    for filename in files:
+        if not filename.endswith('.wmd'):
+            continue
+        dataset_id = filename[:-4]
+        meta = _preflib_metadata(os.path.join(ds_dir, filename))
+        node_count = meta.get('nodes') or 0
+        if node_count and node_count > MAX_INTERACTIVE_NODES:
+            continue
+        datasets.append({
+            'id': dataset_id,
+            'nodes': meta.get('nodes'),
+            'edges': meta.get('edges'),
+            'label': f"{dataset_id} ({meta.get('nodes', '?')} nodes)",
+        })
+    datasets.sort(key=lambda item: (item.get('nodes') or 0, item['id']))
+    return jsonify({'datasets': datasets, 'max_interactive_nodes': MAX_INTERACTIVE_NODES})
 
 
 @app.route('/api/load')
 def load_data():
-    dataset_id = request.args.get('dataset_id', default='00036-00000001', type=str)
+    dataset_id = _safe_dataset_id(request.args.get('dataset_id', default='00036-00000001', type=str))
     
     kx = KidneyExchange()
     if dataset_id == 'csv':
@@ -49,8 +103,19 @@ def load_data():
     else:
         ds_dir = os.path.join(os.path.dirname(__file__), 'dataset')
         base_path = os.path.join(ds_dir, dataset_id)
+        wmd_path = base_path + '.wmd'
+        if not os.path.exists(wmd_path):
+            return _api_error(f'Dataset {dataset_id} was not found on the server.', 404)
+        meta = _preflib_metadata(wmd_path)
+        node_count = meta.get('nodes') or 0
+        if node_count > MAX_INTERACTIVE_NODES:
+            return _api_error(
+                f'Dataset {dataset_id} has {node_count} nodes. '
+                f'The web visualizer is capped at {MAX_INTERACTIVE_NODES} nodes to avoid Hugging Face request timeouts.',
+                413,
+            )
         if not kx.load_from_preflib(base_path):
-            return jsonify({'error': f'Failed to load PrefLib instance {dataset_id}'})
+            return _api_error(f'Failed to load PrefLib instance {dataset_id}', 500)
         # Note: load_from_preflib already builds the adjacency list based on .wmd file
 
     _cache['kx'] = kx   # keep reference for MIAM
@@ -73,7 +138,7 @@ def load_data():
     _cache['graph'] = {'nodes': nodes, 'edges': edges}
 
     # Cycle analysis
-    cycles           = kx.find_cycles(max_length=3)
+    cycles           = kx.find_cycles(max_length=3, max_cycles=CYCLE_RESULT_LIMIT)
     total_t_induced  = 0
     total_t_acyclic  = 0
     cycle_results    = []
@@ -106,7 +171,7 @@ def load_data():
         'total_acyclic_time_ms': total_t_acyclic * 1000,
     }
 
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'dataset_id': dataset_id})
 
 
 @app.route('/api/graph')

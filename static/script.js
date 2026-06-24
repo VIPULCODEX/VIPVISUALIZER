@@ -78,22 +78,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const datasetSelect  = document.getElementById('datasetSelect');
     const nodeInputRow   = document.getElementById('nodeInputRow');
 
+    async function fetchJson(url) {
+        const res = await fetch(url);
+        let data = {};
+        try {
+            data = await res.json();
+        } catch (e) {
+            throw new Error(`Server returned ${res.status} ${res.statusText}`);
+        }
+        if (!res.ok || data.error) {
+            throw new Error(data.error || `Request failed with ${res.status}`);
+        }
+        return data;
+    }
+
     // Fetch available datasets
     fetch('/api/datasets')
         .then(res => res.json())
         .then(data => {
             if (data.datasets && data.datasets.length > 0) {
                 const group = document.createElement('optgroup');
-                group.label = 'PrefLib Instances (EJOR 2026)';
-                data.datasets.forEach(ds => {
+                group.label = `PrefLib Instances (up to ${data.max_interactive_nodes || 256} nodes)`;
+                data.datasets.forEach(item => {
+                    const ds = typeof item === 'string' ? item : item.id;
+                    const label = typeof item === 'string' ? item : item.label;
                     if (ds === '00036-00000001') return;
                     const opt = document.createElement('option');
                     opt.value = ds;
-                    opt.textContent = ds;
+                    opt.textContent = label || ds;
                     group.appendChild(opt);
                 });
                 datasetSelect.appendChild(group);
             }
+        })
+        .catch(err => {
+            console.error(err);
+            hudStatus.textContent = 'Could not list datasets';
         });
 
     datasetSelect.addEventListener('change', () => {
@@ -202,8 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const loadUrl = `/api/load?nodes=${numNodes}&dataset_id=${encodeURIComponent(dsId)}`;
-            const resLoad = await fetch(loadUrl);
-            const dataLoad = await resLoad.json();
+            const dataLoad = await fetchJson(loadUrl);
 
             if (dataLoad.success) {
                 hudStatus.textContent = 'Building graph…';
@@ -216,8 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {
             console.error(e);
-            hudStatus.textContent = 'Network error';
-            alert('Could not reach the server. Is Flask running?');
+            hudStatus.textContent = 'Load failed';
+            alert(e.message || 'Could not load data from the server.');
         } finally {
             btnLoad.disabled = false;
             btnText.textContent = 'Reload Graph';
@@ -229,8 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Fetch Graph ────────────────────────────────────────────
     async function fetchGraph() {
-        const res  = await fetch('/api/graph');
-        const data = await res.json();
+        const data = await fetchJson('/api/graph');
 
         animateValue(elNodeCount, data.nodes.length);
         animateValue(elEdgeCount, data.edges.length);
@@ -261,8 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Fetch Cycles ───────────────────────────────────────────
     async function fetchCycles() {
-        const res  = await fetch('/api/cycles');
-        const data = await res.json();
+        const data = await fetchJson('/api/cycles');
 
         const count = data.count || 0;
         animateValue(elCycleCount, count);
@@ -474,19 +491,14 @@ document.addEventListener('DOMContentLoaded', () => {
         hudStatus.textContent = runningText;
 
         try {
-            const res = await fetch(endpoint);
-            const data = await res.json();
-            
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
+            const data = await fetchJson(endpoint);
             
             addCompareCard(data);
             hudStatus.textContent = `${data.abbrev} complete: ${data.transplants} transplants.`;
         } catch (e) {
             console.error(e);
             hudStatus.textContent = `Error running algorithm`;
+            alert(e.message || 'Could not run algorithm.');
         } finally {
             btn.disabled = false;
             textSpan.textContent = defaultText;

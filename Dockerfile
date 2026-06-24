@@ -1,10 +1,5 @@
 FROM python:3.9-slim
 
-# Install git and git-lfs for cloning the dataset from GitHub
-RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs && \
-    git lfs install && \
-    rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 # Copy requirements first for Docker layer caching
@@ -16,12 +11,7 @@ COPY app.py .
 COPY kidney_exchange.py .
 COPY templates/ templates/
 COPY static/ static/
-
-# Clone the full repo (shallow) and pull LFS files, then keep only dataset/
-RUN git clone --depth 1 https://github.com/VIPULCODEX/VIPVISUALIZER.git /tmp/repo && \
-    cd /tmp/repo && git lfs pull && \
-    cp -r /tmp/repo/dataset /app/dataset && \
-    rm -rf /tmp/repo
+COPY dataset/ dataset/
 
 # Verify dataset was cloned correctly
 RUN echo "Dataset files:" && ls /app/dataset/ | head -20 && \
@@ -30,4 +20,4 @@ RUN echo "Dataset files:" && ls /app/dataset/ | head -20 && \
 
 # Hugging Face Spaces uses port 7860
 EXPOSE 7860
-CMD ["gunicorn", "-b", "0.0.0.0:7860", "-w", "2", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:7860", "-w", "1", "--threads", "4", "--timeout", "180", "app:app"]
