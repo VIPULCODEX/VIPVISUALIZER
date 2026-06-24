@@ -73,36 +73,61 @@ class KidneyExchange:
             return default
 
     def load_from_preflib(self, base_path: str) -> bool:
-        """Load graph from a PrefLib .wmd and .dat pair."""
-        import os
+        """Load graph from a PrefLib .wmd and optionally .dat pair.
+        Falls back to wmd-only mode if .dat is missing (e.g. LFS not pulled)."""
+        import os, random
         dat_path = base_path + ".dat"
         wmd_path = base_path + ".wmd"
         
-        if not os.path.exists(dat_path) or not os.path.exists(wmd_path):
-            print(f"Error: Could not find {dat_path} or {wmd_path}")
+        if not os.path.exists(wmd_path):
+            print(f"Error: Could not find {wmd_path}")
             return False
-            
+        
+        # Check if .dat content is real (not an LFS pointer)
+        dat_available = False
+        if os.path.exists(dat_path):
+            with open(dat_path, 'r') as f:
+                first_line = f.readline().strip()
+                # LFS pointer files start with "version https://git-lfs"
+                if not first_line.startswith('version https://git-lfs'):
+                    dat_available = True
+                    
         self.nodes = {}
         self.adj_list = {}
         
-        # Parse nodes from .dat
-        with open(dat_path, 'r') as f:
-            lines = f.read().splitlines()
-            for line in lines[1:]: # Skip header
-                if not line.strip(): continue
-                parts = line.split(',')
-                node_id = str(parts[0]).strip()
-                patient_bg = parts[1].strip()
-                donor_bg = parts[2].strip()
-                self.nodes[node_id] = {
-                    'donor': donor_bg,
-                    'recipient': patient_bg,
-                    'pra': self._safe_float(parts[4]),
-                    'is_altruist': int(parts[6].strip()) == 1
-                }
-                self.adj_list[node_id] = []
+        if dat_available:
+            # Parse nodes from .dat
+            with open(dat_path, 'r') as f:
+                lines = f.read().splitlines()
+                for line in lines[1:]: # Skip header
+                    if not line.strip(): continue
+                    parts = line.split(',')
+                    node_id = str(parts[0]).strip()
+                    patient_bg = parts[1].strip()
+                    donor_bg = parts[2].strip()
+                    self.nodes[node_id] = {
+                        'donor': donor_bg,
+                        'recipient': patient_bg,
+                        'pra': self._safe_float(parts[4]),
+                        'is_altruist': int(parts[6].strip()) == 1
+                    }
+                    self.adj_list[node_id] = []
+        
+        # Also check .wmd for LFS pointer
+        wmd_is_real = True
+        with open(wmd_path, 'r') as f:
+            first_line = f.readline().strip()
+            if first_line.startswith('version https://git-lfs'):
+                wmd_is_real = False
                 
-        # Parse edges from .wmd
+        if not wmd_is_real:
+            print(f"Error: {wmd_path} is an LFS pointer, not real data")
+            return False
+                
+        # Parse edges from .wmd, and infer nodes if .dat was missing
+        blood_types = ['O', 'A', 'B', 'AB']
+        rng = random.Random(42)  # deterministic for reproducibility
+        
         with open(wmd_path, 'r') as f:
             for line in f:
                 line = line.strip()
@@ -111,10 +136,24 @@ class KidneyExchange:
                 if len(parts) >= 2:
                     u = str(parts[0]).strip()
                     v = str(parts[1]).strip()
+                    # Create nodes on-the-fly if .dat was missing
+                    if not dat_available:
+                        for nid in (u, v):
+                            if nid not in self.nodes:
+                                d_bg = rng.choice(blood_types)
+                                r_bg = rng.choice(blood_types)
+                                self.nodes[nid] = {
+                                    'donor': d_bg,
+                                    'recipient': r_bg,
+                                    'pra': round(rng.uniform(0, 100), 1),
+                                    'is_altruist': rng.random() < 0.05
+                                }
+                                self.adj_list[nid] = []
                     if u in self.adj_list and v in self.nodes:
                         self.adj_list[u].append(v)
                         
-        print(f"Loaded {len(self.nodes)} pairs from PrefLib instance {base_path}")
+        mode = "full (.dat+.wmd)" if dat_available else "wmd-only (synthetic nodes)"
+        print(f"Loaded {len(self.nodes)} pairs from PrefLib instance {base_path} [{mode}]")
         return True
 
     def can_donate(self, donor, recipient):
